@@ -1,4 +1,4 @@
-# ar-llm
+# Large Language Model Files
 
 Personal [pi](https://github.com/mariozechner/pi-coding-agent) skills and extensions for LLM-assisted development.
 

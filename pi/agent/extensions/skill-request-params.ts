@@ -1,5 +1,7 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
 
 /**
  * Skill Request Parameters Extension
@@ -13,16 +15,19 @@ import * as fs from "fs";
  * 3. LLM auto-invocation — detected by scanning non-system messages for skill file paths
  *
  * Usage:
- * 1. Define your skill -> requestParams mapping below in SKILL_REQUEST_PARAMS.
+ * 1. Place a `skill-request-params.json` config file in your agent directory.
+ *    Default locations (checked in order):
+ *      - $SKILL_REQUEST_PARAMS_DIR/skill-request-params.json
+ *      - $PI_CODING_AGENT_DIR/skill-request-params.json
+ *      - ~/.pi/agent/skill-request-params.json
  * 2. Skill names must match the 'name' field in your SKILL.md frontmatter.
- * 3. Optional "default" entry: fallback params when no skill is detected.
- *    Omit it entirely to apply no custom params when no skill matches.
+ * 3. Extension exits if no config file is found.
  * 4. Test with: pi -e skill-request-params.ts
  * 5. Or place in ~/.pi/agent/extensions/ for auto-discovery.
  */
 
 // ============================================================
-// CONFIGURATION: Define per-skill request parameters here
+// TYPES
 // ============================================================
 
 interface ChatTemplateKwargs {
@@ -45,123 +50,81 @@ interface SkillRequestEntry {
   aliases?: string[]; // additional skill names that share these params
 }
 
+interface SkillRequestConfig {
+  default: SkillRequestParams;
+  skills: Record<string, SkillRequestEntry>;
+}
+
 /**
- * Map skill names (or a canonical name) to their request parameters.
- * Use `aliases` to share params across multiple skills.
- *
- * Optional "default" entry: fallback params applied when no skill is detected.
- * Omit it entirely to apply no custom params when no skill matches.
+ * Resolve the directory containing the config file:
+ *   1. SKILL_REQUEST_PARAMS_DIR env var
+ *   2. PI_CODING_AGENT_DIR env var
+ *   3. ~/.pi/agent
  */
-type SkillParams = {
-  temperature: number;
-  top_p: number;
-  top_k: number;
-  min_p: number;
-  presence_penalty: number;
-  repetition_penalty: number;
-  chat_template_kwargs: ChatTemplateKwargs;
-};
+function resolveConfigDir(): string {
+  return process.env.SKILL_REQUEST_PARAMS_DIR
+    || process.env.PI_CODING_AGENT_DIR
+    || path.join(os.homedir(), ".pi", "agent");
+}
 
-const SKILL_REQUEST_PARAMS: Record<string, SkillRequestEntry> = {
-  "default": {
-    params: {
-      temperature: 0.7,
-      top_p: 0.80,
-      top_k: 20,
-      min_p: 0.0,
-      presence_penalty: 1.5,
-      repetition_penalty: 1.0,
-      chat_template_kwargs: {
-        enable_thinking: true,
-        preserve_thinking: false,
-      },
-    },
-  },
+/**
+ * Load and validate the skill-request-params.json config file.
+ * Throws if the file doesn't exist or has an invalid shape.
+ */
+function loadConfig(): SkillRequestConfig {
+  const dir = resolveConfigDir();
+  const filePath = path.join(dir, "skill-request-params.json");
 
-  "coder": {
-    params: {
-      temperature: 0.6,
-      top_p: 0.95,
-      top_k: 20,
-      min_p: 0.0,
-      presence_penalty: 0.0,
-      repetition_penalty: 1.0,
-      chat_template_kwargs: {
-        enable_thinking: true,
-        preserve_thinking: true,
-      },
-    },
-    aliases: ["clojure-coder", "babashka-script-master"],
-  },
+  if (!fs.existsSync(filePath)) {
+    throw new Error(
+      `[skill-request-params] Config file not found at ${filePath}\n` +
+      `Set SKILL_REQUEST_PARAMS_DIR or PI_CODING_AGENT_DIR to point to the directory containing skill-request-params.json.`
+    );
+  }
 
-  "one-shot": {
-    params: {
-      temperature: 0.6,
-      top_p: 0.95,
-      top_k: 20,
-      min_p: 0.0,
-      presence_penalty: 0.0,
-      repetition_penalty: 1.0,
-      chat_template_kwargs: {
-        enable_thinking: false,
-      },
-    },
-  },
+  const raw = fs.readFileSync(filePath, "utf-8");
+  const config: SkillRequestConfig = JSON.parse(raw);
 
-  "clojure-formatter": {
-    params: {
-      temperature: 0.7,
-      top_p: 0.80,
-      top_k: 20,
-      min_p: 0.0,
-      presence_penalty: 1.5,
-      repetition_penalty: 1.0,
-      chat_template_kwargs: {
-        enable_thinking: false,
-      },
-    },
-  },
+  if (!config.default) {
+    throw new Error(`[skill-request-params] Config missing "default" key in ${filePath}`);
+  }
+  if (!config.skills || typeof config.skills !== "object") {
+    throw new Error(`[skill-request-params] Config missing "skills" key in ${filePath}`);
+  }
 
-  "git-commit-writer": {
-    params: {
-      temperature: 0.7,
-      top_p: 0.80,
-      top_k: 20,
-      min_p: 0.0,
-      presence_penalty: 1.5,
-      repetition_penalty: 1.0,
-      chat_template_kwargs: {
-        enable_thinking: true,
-        preserve_thinking: false,
-      },
-    },
-  },
-};
+  return config;
+}
 
 /**
  * Build a lookup from every skill name (primary + aliases) to its params,
- * and extract the optional default params separately.
+ * and extract the default params separately.
  */
-function buildLookup(table: Record<string, SkillRequestEntry>): {
+function buildLookup(config: SkillRequestConfig): {
   lookup: Record<string, SkillRequestParams>;
-  defaultParams: SkillRequestParams | null;
+  defaultParams: SkillRequestParams;
 } {
   const lookup: Record<string, SkillRequestParams> = {};
-  let defaultParams: SkillRequestParams | null = null;
-  for (const [name, entry] of Object.entries(table)) {
-    if (name === "default") {
-      defaultParams = entry.params;
-    } else {
-      lookup[name] = entry.params;
-      for (const alias of entry.aliases ?? []) {
-        lookup[alias] = entry.params;
-      }
+  for (const [name, entry] of Object.entries(config.skills)) {
+    lookup[name] = entry.params;
+    for (const alias of entry.aliases ?? []) {
+      lookup[alias] = entry.params;
     }
   }
-  return { lookup, defaultParams };
+  return { lookup, defaultParams: config.default };
 }
 
-const { lookup: PARAMS_LOOKUP, defaultParams: DEFAULT_PARAMS } = buildLookup(SKILL_REQUEST_PARAMS);
+let PARAMS_LOOKUP: Record<string, SkillRequestParams>;
+let DEFAULT_PARAMS: SkillRequestParams;
+
+try {
+  const config = loadConfig();
+  const built = buildLookup(config);
+  PARAMS_LOOKUP = built.lookup;
+  DEFAULT_PARAMS = built.defaultParams;
+} catch (err: any) {
+  console.error(err.message);
+  process.exit(1);
+}
 
 /**
  * Merges skill-specific request params into the provider payload.

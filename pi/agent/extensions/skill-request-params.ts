@@ -1,4 +1,4 @@
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
@@ -6,24 +6,34 @@ import * as path from "path";
 /**
  * Skill Request Parameters Extension
  *
- * Sets custom provider request parameters (temperature, top_p, top_k, etc.)
- * per skill. Parameters are injected into the provider payload before each request.
+ * Injects provider request parameters (temperature, top_p, top_k, etc.) on a
+ * per-provider / per-model / per-skill basis.  All scoping lives under the
+ * `providers` key — providers absent from the config are silently skipped so
+ * their payloads are never touched.
  *
- * Detection strategies:
- * 1. Explicit `/skill:name` — detected in `input` handler (before expansion)
- * 2. Expanded `<skill name="...">` block — parsed from `event.prompt` in `before_agent_start`
- * 3. LLM auto-invocation — detected by scanning non-system messages for skill file paths
+ * Resolution order (lowest → highest priority, merged via Object.assign):
+ *   1. providers.<provider>.default                          — provider-wide base
+ *   2. providers.<provider>.models.<modelId>.default        — model refinement
+ *   3. providers.<provider>.skills.<skillName>              — skill override
+ *   4. providers.<provider>.models.<modelId>.skills.<skill> — most specific
  *
- * Usage:
- * 1. Place a `skill-request-params.json` config file in your agent directory.
- *    Default locations (checked in order):
- *      - $SKILL_REQUEST_PARAMS_DIR/skill-request-params.json
- *      - $PI_CODING_AGENT_DIR/skill-request-params.json
- *      - ~/.pi/agent/skill-request-params.json
- * 2. Skill names must match the 'name' field in your SKILL.md frontmatter.
- * 3. Extension exits if no config file is found.
- * 4. Test with: pi -e skill-request-params.ts
- * 5. Or place in ~/.pi/agent/extensions/ for auto-discovery.
+ * When no skill is active only levels 1 & 2 apply.
+ * If resolution produces an empty object the payload is left unchanged.
+ *
+ * Skill detection strategies (unchanged from v1):
+ *   1. Explicit `/skill:name`  — detected in `input` handler (before expansion)
+ *   2. Expanded `<skill name="...">` block — parsed from `event.prompt`
+ *   3. LLM auto-invocation — last non-system message scanned for skill paths
+ *
+ * Config file: `skill-request-params.json`
+ * Default locations (checked in order):
+ *   - $SKILL_REQUEST_PARAMS_DIR/skill-request-params.json
+ *   - $PI_CODING_AGENT_DIR/skill-request-params.json
+ *   - ~/.pi/agent/skill-request-params.json
+ *
+ * Skill names must match the `name` field in your SKILL.md frontmatter.
+ * Test with:  pi -e skill-request-params.ts
+ * Auto-load:  place in ~/.pi/agent/extensions/
  */
 
 // ============================================================
@@ -35,6 +45,7 @@ interface ChatTemplateKwargs {
   preserve_thinking?: boolean;
 }
 
+/** Parameters injected into the provider request payload. */
 interface SkillRequestParams {
   temperature?: number;
   top_p?: number;
@@ -45,14 +56,61 @@ interface SkillRequestParams {
   chat_template_kwargs?: ChatTemplateKwargs;
 }
 
+/** A skill entry: required params plus optional name aliases. */
 interface SkillRequestEntry {
   params: SkillRequestParams;
   aliases?: string[]; // additional skill names that share these params
 }
 
+/**
+ * Config scoped to a specific model within a provider.
+ * - `default`: applied to every request on this model (no skill active)
+ * - `skills`:  per-skill overrides merged on top of `default`
+ */
+interface ProviderModelConfig {
+  default?: SkillRequestParams;
+  skills?: Record<string, SkillRequestEntry>;
+}
+
+/**
+ * Config for a single provider.
+ * Extends ProviderModelConfig so `default` and `skills` apply provider-wide,
+ * and `models` allows per-model refinement on top.
+ */
+interface ProviderConfig extends ProviderModelConfig {
+  models?: Record<string, ProviderModelConfig>;
+}
+
+/**
+ * Root config shape.  All param scoping lives under `providers`.
+ * Providers absent from this map are silently skipped — their payloads
+ * are never touched.
+ *
+ * Example:
+ * {
+ *   "providers": {
+ *     "lm-studio": {
+ *       "default": { "temperature": 0.6 },
+ *       "skills": {
+ *         "clojure-coder": { "params": { "temperature": 0.1, "top_k": 40 } }
+ *       },
+ *       "models": {
+ *         "qwen3-30b-a3b": {
+ *           "default": { "top_k": 20 },
+ *           "skills": {
+ *             "clojure-coder": { "params": { "chat_template_kwargs": { "enable_thinking": false } } }
+ *           }
+ *         }
+ *       }
+ *     },
+ *     "anthropic": {
+ *       "default": { "temperature": 0.7 }
+ *     }
+ *   }
+ * }
+ */
 interface SkillRequestConfig {
-  default: SkillRequestParams;
-  skills: Record<string, SkillRequestEntry>;
+  providers: Record<string, ProviderConfig>;
 }
 
 /**
@@ -85,45 +143,73 @@ function loadConfig(): SkillRequestConfig {
   const raw = fs.readFileSync(filePath, "utf-8");
   const config: SkillRequestConfig = JSON.parse(raw);
 
-  if (!config.default) {
-    throw new Error(`[skill-request-params] Config missing "default" key in ${filePath}`);
-  }
-  if (!config.skills || typeof config.skills !== "object") {
-    throw new Error(`[skill-request-params] Config missing "skills" key in ${filePath}`);
+  if (!config.providers || typeof config.providers !== "object") {
+    throw new Error(`[skill-request-params] Config missing "providers" key in ${filePath}`);
   }
 
   return config;
 }
 
-/**
- * Build a lookup from every skill name (primary + aliases) to its params,
- * and extract the default params separately.
- */
-function buildLookup(config: SkillRequestConfig): {
-  lookup: Record<string, SkillRequestParams>;
-  defaultParams: SkillRequestParams;
-} {
-  const lookup: Record<string, SkillRequestParams> = {};
-  for (const [name, entry] of Object.entries(config.skills)) {
-    lookup[name] = entry.params;
-    for (const alias of entry.aliases ?? []) {
-      lookup[alias] = entry.params;
-    }
-  }
-  return { lookup, defaultParams: config.default };
-}
-
-let PARAMS_LOOKUP: Record<string, SkillRequestParams>;
-let DEFAULT_PARAMS: SkillRequestParams;
+let CONFIG: SkillRequestConfig;
 
 try {
-  const config = loadConfig();
-  const built = buildLookup(config);
-  PARAMS_LOOKUP = built.lookup;
-  DEFAULT_PARAMS = built.defaultParams;
+  CONFIG = loadConfig();
 } catch (err: any) {
   console.error(err.message);
   process.exit(1);
+}
+
+/**
+ * Resolve the effective SkillRequestParams for a given provider / model / skill
+ * by merging the four config levels from lowest to highest priority:
+ *
+ *   1. providers.<provider>.default
+ *   2. providers.<provider>.models.<modelId>.default
+ *   3. providers.<provider>.skills.<skillName>      (only when skillName != null)
+ *   4. providers.<provider>.models.<modelId>.skills.<skillName>
+ *
+ * Returns undefined when the provider is not in config (payload untouched).
+ * Returns an empty-ish object when the provider is configured but nothing
+ * matched — callers should check Object.keys(result).length before applying.
+ */
+function resolveParams(
+  provider: string | null,
+  modelId: string | null,
+  skillName: string | null
+): SkillRequestParams | undefined {
+  if (!provider) return undefined;
+
+  const providerCfg = CONFIG.providers[provider];
+  if (!providerCfg) return undefined;
+
+  // Expand aliases so skill lookup works for both primary names and aliases.
+  // Build a flat alias→canonicalEntry map scoped to this provider (+ model).
+  function findSkillEntry(
+    skillsCfg: Record<string, SkillRequestEntry> | undefined,
+    name: string
+  ): SkillRequestParams | undefined {
+    if (!skillsCfg || !name) return undefined;
+    // Direct match
+    if (skillsCfg[name]) return skillsCfg[name].params;
+    // Alias match
+    for (const entry of Object.values(skillsCfg)) {
+      if (entry.aliases?.includes(name)) return entry.params;
+    }
+    return undefined;
+  }
+
+  const modelCfg = modelId ? providerCfg.models?.[modelId] : undefined;
+
+  // Level 1: provider default
+  const l1 = providerCfg.default ?? {};
+  // Level 2: model default
+  const l2 = modelCfg?.default ?? {};
+  // Level 3: provider skill
+  const l3 = skillName ? (findSkillEntry(providerCfg.skills, skillName) ?? {}) : {};
+  // Level 4: model skill
+  const l4 = skillName ? (findSkillEntry(modelCfg?.skills, skillName) ?? {}) : {};
+
+  return Object.assign({}, l1, l2, l3, l4);
 }
 
 /**
@@ -177,6 +263,18 @@ function formatParams(params: SkillRequestParams): string {
   return parts.join(" ");
 }
 
+/** Build a short context label for status bar and notifications. */
+function formatLabel(
+  provider: string | null,
+  modelId: string | null,
+  skillName: string | null,
+  params: SkillRequestParams
+): string {
+  const scope = [provider ?? "?", modelId ?? "*"].join("/");
+  const skill = skillName ? ` [${skillName}]` : "";
+  return `⚡ ${scope}${skill}: ${formatParams(params)}`;
+}
+
 /**
  * Parse <skill name="..."> block from expanded prompt text.
  * Matches the format pi generates when expanding /skill:name commands:
@@ -194,6 +292,8 @@ function parseSkillBlock(prompt: string): string | null {
 export default function (pi: ExtensionAPI) {
   let activeSkill: string | null = null;
   let manualOverride = false;
+  let activeProvider: string | null = null;
+  let activeModelId: string | null = null;
   // Reverse lookup: skill file path -> skill name (populated in before_agent_start)
   let skillPathToName: Map<string, string> = new Map();
 
@@ -205,12 +305,26 @@ export default function (pi: ExtensionAPI) {
     }
   }
 
+  // Track active provider + model whenever the user switches model.
+  pi.on("model_select", (event, _ctx) => {
+    activeProvider = (event.model as any).provider ?? null;
+    activeModelId = (event.model as any).id ?? null;
+    log(`model_select: ${activeProvider}/${activeModelId}`);
+  });
+
   // Detect /skill:name in raw input BEFORE expansion swallows it
   pi.on("input", (event, ctx) => {
     activeSkill = null;
     manualOverride = false;
     const match = event.text.match(/\/skill:([a-z0-9-]+)/);
-    if (match && PARAMS_LOOKUP[match[1]] !== undefined) {
+    // Accept the skill name if the provider config knows about it, or if no
+    // provider is active yet (we'll validate at request time).
+    // Only set activeSkill if resolveParams would actually produce params for
+    // this provider+skill combo — avoids noisy notifications for unconfigured skills.
+    const wouldApply = match
+      ? resolveParams(activeProvider, activeModelId, match[1])
+      : undefined;
+    if (match && wouldApply && Object.keys(wouldApply).length > 0) {
       activeSkill = match[1];
       manualOverride = true;
       log(`Manual override: ${activeSkill}`);
@@ -219,8 +333,16 @@ export default function (pi: ExtensionAPI) {
     return { action: "continue" };
   });
 
-  // Build path->name lookup and detect explicit skill from expanded prompt
+  // Build path->name lookup and detect explicit skill from expanded prompt.
+  // Also initialise provider/model from ctx.model for session-restore cases
+  // where model_select may not have fired.
   pi.on("before_agent_start", (event, ctx) => {
+    if (!activeProvider && ctx.model) {
+      activeProvider = (ctx.model as any).provider ?? null;
+      activeModelId = (ctx.model as any).id ?? null;
+      log(`before_agent_start: initialised provider=${activeProvider} model=${activeModelId}`);
+    }
+
     const skills = event.systemPromptOptions?.skills;
 
     // Build reverse path->name lookup from loaded skills
@@ -241,7 +363,7 @@ export default function (pi: ExtensionAPI) {
     const explicitSkill = parseSkillBlock(event.prompt);
     log(`before_agent_start: parseSkillBlock returned ${explicitSkill ?? "null"}`);
     log(`before_agent_start: prompt preview: ${event.prompt.substring(0, 300)}`);
-    if (explicitSkill && PARAMS_LOOKUP[explicitSkill]) {
+    if (explicitSkill) {
       activeSkill = explicitSkill;
       manualOverride = true;
       log(`Explicit skill from prompt: ${activeSkill}`);
@@ -268,8 +390,8 @@ export default function (pi: ExtensionAPI) {
       }
       if (lastMsg) {
         const msgStr = JSON.stringify(lastMsg);
-        for (const [path, name] of skillPathToName) {
-          if (msgStr.includes(path) && PARAMS_LOOKUP[name]) {
+        for (const [skillPath, name] of skillPathToName) {
+          if (msgStr.includes(skillPath)) {
             activeSkill = name;
             log(`LLM auto-invoked skill: ${activeSkill}`);
             break;
@@ -278,19 +400,15 @@ export default function (pi: ExtensionAPI) {
       }
     }
 
-    // Apply skill params or fallback to default if configured
-    const params = activeSkill
-      ? PARAMS_LOOKUP[activeSkill]
-      : DEFAULT_PARAMS;
+    // Resolve params through the 4-level hierarchy.
+    const params = resolveParams(activeProvider, activeModelId, activeSkill);
 
-    if (params) {
+    if (params && Object.keys(params).length > 0) {
       const modifiedPayload = applySkillParams(event.payload, params);
-      const label = activeSkill
-        ? `⚡ ${activeSkill}: ${formatParams(params)}`
-        : `⚡ default: ${formatParams(params)}`;
+      const label = formatLabel(activeProvider, activeModelId, activeSkill, params);
       ctx.ui.setStatus("skill-params", label);
       ctx.ui.notify(`[skill-request-params] ${label}`, "info");
-      log(`Applied: ${activeSkill ?? "default"}`);
+      log(`Applied: ${label}`);
       return modifiedPayload;
     }
     ctx.ui.setStatus("skill-params", "");
@@ -300,6 +418,8 @@ export default function (pi: ExtensionAPI) {
   pi.on("session_shutdown", () => {
     activeSkill = null;
     manualOverride = false;
+    activeProvider = null;
+    activeModelId = null;
     skillPathToName.clear();
   });
 }

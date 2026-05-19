@@ -1,0 +1,45 @@
+# vLLM Container Unit (podlet-generated)
+#
+# Usage: systemctl --user start vllm@<model-name>
+#   where <model-name> selects the .env file under conf/
+#   e.g.  vllm@Qwen3.6-27B  ->  conf/Qwen3.6-27B.env + conf/common.env
+#
+# Each .env sets SM_VLLM_* env vars consumed by sagemaker-entrypoint.sh.
+
+[Unit]
+Description=vLLM (parameterized)
+StartLimitIntervalSec=2m
+StartLimitBurst=5
+
+[Container]
+ContainerName=vllm-%i
+
+Image=codeberg.org/k153/vllm-openai-custom:latest
+
+AutoUpdate=registry
+AddDevice=nvidia.com/gpu=all
+
+Volume=/var/lib/llm/chat-templates:/root/chat-templates
+Volume=/var/lib/llm/models/vllm:/root/models
+
+PodmanArgs=--ipc=host
+
+PublishPort=12434:8000
+
+EnvironmentFile=/opt/llm/vllm/conf/%i.env
+EnvironmentFile=/opt/llm/vllm/conf/common.env
+
+# container runs as root, so no keep-id
+PodmanArgs=--pull=never --userns=""
+
+HealthStartupRetries=3
+
+[Service]
+Restart=no
+RestartSec=10
+SyslogIdentifier=%N
+
+TimeoutStartSec=900
+
+[Install]
+WantedBy=default.target

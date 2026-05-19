@@ -1,0 +1,24 @@
+FROM vllm/vllm-openai:v0.21.0
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# From the official Dockerfile
+RUN apt-get update -y \
+    && apt-get install -y --no-install-recommends \
+       software-properties-common \
+       git \
+       curl \
+       sudo \
+       python3-pip \
+       libibverbs-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV UV_HTTP_TIMEOUT=500
+ENV UV_INDEX_STRATEGY="unsafe-best-match"
+ENV UV_LINK_MODE=copy
+
+RUN uv pip install --system git+https://github.com/huggingface/transformers.git
+
+COPY sagemaker-entrypoint.sh .
+RUN chmod +x sagemaker-entrypoint.sh
+ENTRYPOINT ["./sagemaker-entrypoint.sh"]

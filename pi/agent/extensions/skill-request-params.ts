@@ -37,6 +37,13 @@ import * as path from "path";
  */
 
 // ============================================================
+// CONSTANTS
+// ============================================================
+
+/** Provider-specific keys for thinking token budgets (pass-through, no renaming). */
+const THINKING_BUDGET_KEYS = ["thinking_budget_tokens", "thinking_token_budget"] as const;
+
+// ============================================================
 // TYPES
 // ============================================================
 
@@ -54,7 +61,8 @@ interface SkillRequestParams {
   presence_penalty?: number;
   repetition_penalty?: number;
   chat_template_kwargs?: ChatTemplateKwargs;
-  thinking_token_budget?: number;
+  // Provider-specific thinking budget keys (pass-through, no renaming)
+  [key: string]: unknown;
 }
 
 /** A skill entry: required params plus optional name aliases. */
@@ -240,8 +248,11 @@ function applySkillParams(payload: any, params: SkillRequestParams): any {
   if (params.chat_template_kwargs !== undefined) {
     result.chat_template_kwargs = params.chat_template_kwargs;
   }
-  if (params.thinking_token_budget !== undefined) {
-    result.thinking_token_budget = params.thinking_token_budget;
+  // Pass through provider-specific thinking budget keys as-is
+  for (const key of THINKING_BUDGET_KEYS) {
+    if (params[key] !== undefined) {
+      result[key] = params[key];
+    }
   }
 
   // Remove top-level enable_thinking — it's handled by chat_template_kwargs
@@ -262,13 +273,13 @@ function formatParams(params: SkillRequestParams): string {
     const { enable_thinking, preserve_thinking } = params.chat_template_kwargs;
     if (!enable_thinking) parts.push(`th=off`);
     else {
-      const suffix = params.thinking_token_budget !== undefined
-        ? `(${params.thinking_token_budget}tok)`
-        : "";
+      const budget = THINKING_BUDGET_KEYS.map(k => params[k]).find(v => v !== undefined);
+      const suffix = budget !== undefined ? `(${budget}tok)` : "";
       parts.push(preserve_thinking ? `th=preserve${suffix}` : `th=on${suffix}`);
     }
-  } else if (params.thinking_token_budget !== undefined) {
-    parts.push(`budget=${params.thinking_token_budget}tok`);
+  } else {
+    const budget = THINKING_BUDGET_KEYS.map(k => params[k]).find(v => v !== undefined);
+    if (budget !== undefined) parts.push(`budget=${budget}tok`);
   }
   return parts.join(" ");
 }

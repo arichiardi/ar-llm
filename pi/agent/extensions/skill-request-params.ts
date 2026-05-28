@@ -54,7 +54,7 @@ interface SkillRequestParams {
   presence_penalty?: number;
   repetition_penalty?: number;
   chat_template_kwargs?: ChatTemplateKwargs;
-  thinking_display_budget?: number; // sent as thinking_budget_tokens to llama.cpp
+  thinking_token_budget?: number;
 }
 
 /** A skill entry: required params plus optional name aliases. */
@@ -240,8 +240,8 @@ function applySkillParams(payload: any, params: SkillRequestParams): any {
   if (params.chat_template_kwargs !== undefined) {
     result.chat_template_kwargs = params.chat_template_kwargs;
   }
-  if (params.thinking_display_budget !== undefined) {
-    result.thinking_budget_tokens = params.thinking_display_budget;
+  if (params.thinking_token_budget !== undefined) {
+    result.thinking_token_budget = params.thinking_token_budget;
   }
 
   // Remove top-level enable_thinking — it's handled by chat_template_kwargs
@@ -262,13 +262,13 @@ function formatParams(params: SkillRequestParams): string {
     const { enable_thinking, preserve_thinking } = params.chat_template_kwargs;
     if (!enable_thinking) parts.push(`th=off`);
     else {
-      const suffix = params.thinking_display_budget !== undefined
-        ? `(${params.thinking_display_budget}tok)`
+      const suffix = params.thinking_token_budget !== undefined
+        ? `(${params.thinking_token_budget}tok)`
         : "";
       parts.push(preserve_thinking ? `th=preserve${suffix}` : `th=on${suffix}`);
     }
-  } else if (params.thinking_display_budget !== undefined) {
-    parts.push(`budget=${params.thinking_display_budget}tok`);
+  } else if (params.thinking_token_budget !== undefined) {
+    parts.push(`budget=${params.thinking_token_budget}tok`);
   }
   return parts.join(" ");
 }

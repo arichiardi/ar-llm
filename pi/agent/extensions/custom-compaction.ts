@@ -65,6 +65,7 @@ export default function (pi: ExtensionAPI) {
 		const { preparation, branchEntries: _, signal } = event;
 		const { messagesToSummarize, turnPrefixMessages, tokensBefore, firstKeptEntryId, previousSummary } = preparation;
         log(`messagesToSummarize: ${messagesToSummarize.length}, turnPrefixMessages: ${turnPrefixMessages.length}, tokensBefore: ${tokensBefore}`);
+        log(`firstKeptEntryId: ${JSON.stringify(firstKeptEntryId)}, previousSummary length: ${previousSummary?.length ?? 'none'}`);
 
 		const model = ctx.modelRegistry.find(COMPACTION_PROVIDER, COMPACTION_MODEL);
 		if (!model) {
@@ -175,6 +176,8 @@ ${conversationText}
 				if (!signal.aborted) ctx.ui.notify("Compaction summary was empty, using default compaction", "warning");
 				return;
 			}
+
+			log(`Returning compaction: summaryLen=${summary.length}, firstKeptEntryId=${JSON.stringify(firstKeptEntryId)}, tokensBefore=${tokensBefore}`);
 
 			// Return compaction content - SessionManager adds id/parentId
 			// Use firstKeptEntryId from preparation to keep recent messages

@@ -3,7 +3,7 @@
  *
  * Injects org-roam context into the system prompt before each agent turn:
  * - Entry node neighborhood (identity, relationships)
- * - Open TODO items
+ * - Open todo items
  * - Recent journal entries (decrypted via epa-file)
  * - Recent modifications
  *
@@ -28,8 +28,6 @@ function dbg(msg: string) {
     fs.appendFileSync(DEBUG_LOG, `[${new Date().toISOString()}] [ts] ${msg}\n`);
   }
 }
-
-// ─── Config ────────────────────────────────────────────────────────────────
 
 interface OrgRoamMemoryConfig {
   "prompt-file": string;
@@ -77,7 +75,7 @@ function loadConfig(): OrgRoamMemoryConfig {
   }
 }
 
-// ─── Emacs/Elisp Query Layer ──────────────────────────────────────────────
+// Emacs/Elisp Bootstrap
 
 function buildBootstrap(configJsonPath: string, cfg: OrgRoamMemoryConfig): string {
   const debugLog = cfg["debug"]["log-file"];
@@ -138,8 +136,6 @@ async function elispEval<T>(
   }
 }
 
-// ─── Snapshot Management ──────────────────────────────────────────────────
-
 class MemorySnapshot {
   private cached: string | null = null;
 
@@ -171,14 +167,12 @@ class MemorySnapshot {
   }
 }
 
-// ─── Extension Entry Point ────────────────────────────────────────────────
-
 export default function (pi: ExtensionAPI) {
   currentConfig = loadConfig();
   const snapshot = new MemorySnapshot();
   dbg(`Extension initialized`);
 
-  // ── Ambient Context Injection ──────────────────────────────────────────
+  // Ambient Context Injection
 
   pi.on("session_start", () => {
     dbg(`session_start`);
@@ -216,8 +210,6 @@ export default function (pi: ExtensionAPI) {
     currentConfig = loadConfig();
     snapshot.invalidate();
   });
-
-  // ── Debug Command ──────────────────────────────────────────────────────
 
   pi.registerCommand("org-roam-memory", {
     description: "Show current org-roam memory snapshot",

@@ -124,8 +124,7 @@ Called once at extension start before any other function."
                  (setf json-object-type 'plist)
                  (json-read)))))
     (when (org-roam-pi--json-get cfg :roam-directory)
-      (setq org-roam-pi-directory (expand-file-name (org-roam-pi--json-get cfg :roam-directory))
-            org-roam-directory (expand-file-name (org-roam-pi--json-get cfg :roam-directory))))
+      (setq org-roam-pi-directory (expand-file-name (org-roam-pi--json-get cfg :roam-directory))))
     (when (org-roam-pi--json-get cfg :gpg-encrypt-to)
       (setq org-roam-pi-gpg-encrypt-to (org-roam-pi--json-get cfg :gpg-encrypt-to)))
     (when (org-roam-pi--json-get cfg :journal-directory)
@@ -153,7 +152,7 @@ Called once at extension start before any other function."
 (defun org-roam-pi--bootstrap ()
   "Ensure org-roam directory is set and caches are fresh."
   (org-roam-pi--init-logs)
-  (setq org-roam-directory org-roam-pi-directory)
+
   (org-roam-pi--scan-nodes))
 
 

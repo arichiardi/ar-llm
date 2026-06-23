@@ -59,19 +59,7 @@ Use [`@arichiardi/pi-plan-mode`](./extensions/pi-plan-mode) to safely explore a 
 
 ## Local development
 
-Install dependencies from the repository root:
-
-```bash
-npm install
-```
-
-Run typechecks across all packages:
-
-```bash
-npm run typecheck
-```
-
-Try a package locally:
+Try a package locally from the repo root:
 
 ```bash
 pi -e ./extensions/pi-custom-compaction
@@ -81,21 +69,7 @@ pi -e ./extensions/pi-notify
 pi -e ./extensions/pi-plan-mode
 ```
 
-Preview npm package contents before publishing:
-
-```bash
-npm run pack:custom-compaction
-npm run pack:skill-request-params
-npm run pack:handoff
-npm run pack:notify
-npm run pack:plan-mode
-```
-
-First publish of a new scoped package:
-
-```bash
-npm publish --workspace @arichiardi/pi-custom-compaction --access public
-```
+For build commands, adding new extensions, and publishing instructions see [AGENTS.md](./AGENTS.md).
 
 ## Repository structure
 

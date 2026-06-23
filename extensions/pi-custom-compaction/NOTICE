@@ -1,0 +1,14 @@
+This software is released into the public domain under The Unlicense.
+See LICENSE for details.
+
+NOTICE
+------
+The file src/custom-compaction.ts was originally derived from:
+
+  https://github.com/earendil-works/pi/blob/main/packages/coding-agent/examples/extensions/custom-compaction.ts
+
+  Copyright (c) 2025 Mario Zechner
+  Licensed under the MIT License
+
+The original source was substantially rewritten by Andrea Richiardi.
+The MIT license and copyright notice above apply to the original portions.

@@ -1,0 +1,46 @@
+{
+	"name": "@arichiardi/pi-plan-mode",
+	"version": "0.1.0",
+	"description": "Pi extension that adds a read-only plan mode for safe code exploration, step tracking, and constrained tool execution.",
+	"type": "module",
+	"license": "MIT",
+	"private": false,
+	"keywords": [
+		"pi-package",
+		"pi-extension",
+		"pi",
+		"plan",
+		"plan-mode",
+		"exploration"
+	],
+	"files": [
+		"src",
+		"README.md",
+		"LICENSE"
+	],
+	"pi": {
+		"extensions": [
+			"./src/index.ts"
+		]
+	},
+	"scripts": {
+		"typecheck": "tsc --noEmit"
+	},
+	"peerDependencies": {
+		"@earendil-works/pi-agent-core": "*",
+		"@earendil-works/pi-ai": "*",
+		"@earendil-works/pi-coding-agent": "*",
+		"@earendil-works/pi-tui": "*"
+	},
+	"devDependencies": {
+		"@earendil-works/pi-coding-agent": "0.79.10",
+		"@types/node": "^25.6.0",
+		"typescript": "^6.0.3"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/arichiardi/ar-llm.git",
+		"directory": "extensions/pi-plan-mode"
+	},
+	"homepage": "https://github.com/arichiardi/ar-llm/tree/main/extensions/pi-plan-mode#readme"
+}

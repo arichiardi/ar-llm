@@ -1,0 +1,43 @@
+{
+	"name": "@arichiardi/pi-skill-request-params",
+	"version": "0.1.0",
+	"description": "Pi extension that injects per-skill, per-model, and per-provider request parameters (temperature, top_p, thinking, etc.) into every provider payload.",
+	"type": "module",
+	"license": "Unlicense",
+	"private": false,
+	"keywords": [
+		"pi-package",
+		"pi-extension",
+		"pi",
+		"skills",
+		"request-params",
+		"temperature"
+	],
+	"files": [
+		"src",
+		"README.md",
+		"LICENSE"
+	],
+	"pi": {
+		"extensions": [
+			"./src/skill-request-params.ts"
+		]
+	},
+	"scripts": {
+		"typecheck": "tsc --noEmit"
+	},
+	"peerDependencies": {
+		"@earendil-works/pi-coding-agent": "*"
+	},
+	"devDependencies": {
+		"@earendil-works/pi-coding-agent": "0.79.10",
+		"@types/node": "^25.6.0",
+		"typescript": "^6.0.3"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/arichiardi/ar-llm.git",
+		"directory": "extensions/pi-skill-request-params"
+	},
+	"homepage": "https://github.com/arichiardi/ar-llm/tree/main/extensions/pi-skill-request-params#readme"
+}

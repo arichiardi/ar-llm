@@ -1,0 +1,44 @@
+{
+	"name": "@arichiardi/pi-custom-compaction",
+	"version": "0.1.0",
+	"description": "Pi extension that replaces default compaction with a full LLM-generated summary, with configurable model and per-provider request params.",
+	"type": "module",
+	"license": "Unlicense",
+	"private": false,
+	"keywords": [
+		"pi-package",
+		"pi-extension",
+		"pi",
+		"compaction",
+		"summarization"
+	],
+	"files": [
+		"src",
+		"README.md",
+		"LICENSE",
+		"NOTICE"
+	],
+	"pi": {
+		"extensions": [
+			"./src/custom-compaction.ts"
+		]
+	},
+	"scripts": {
+		"typecheck": "tsc --noEmit"
+	},
+	"peerDependencies": {
+		"@earendil-works/pi-ai": "*",
+		"@earendil-works/pi-coding-agent": "*"
+	},
+	"devDependencies": {
+		"@earendil-works/pi-coding-agent": "0.79.10",
+		"@types/node": "^25.6.0",
+		"typescript": "^6.0.3"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/arichiardi/ar-llm.git",
+		"directory": "extensions/pi-custom-compaction"
+	},
+	"homepage": "https://github.com/arichiardi/ar-llm/tree/main/extensions/pi-custom-compaction#readme"
+}

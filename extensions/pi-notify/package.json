@@ -1,0 +1,43 @@
+{
+	"name": "@arichiardi/pi-notify",
+	"version": "0.1.0",
+	"description": "Pi extension that sends a native terminal notification (OSC 777 / OSC 99 / Windows toast) when the agent finishes and is waiting for input.",
+	"type": "module",
+	"license": "MIT",
+	"private": false,
+	"keywords": [
+		"pi-package",
+		"pi-extension",
+		"pi",
+		"notify",
+		"notification",
+		"terminal"
+	],
+	"files": [
+		"src",
+		"README.md",
+		"LICENSE"
+	],
+	"pi": {
+		"extensions": [
+			"./src/notify.ts"
+		]
+	},
+	"scripts": {
+		"typecheck": "tsc --noEmit"
+	},
+	"peerDependencies": {
+		"@earendil-works/pi-coding-agent": "*"
+	},
+	"devDependencies": {
+		"@earendil-works/pi-coding-agent": "0.79.10",
+		"@types/node": "^25.6.0",
+		"typescript": "^6.0.3"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/arichiardi/ar-llm.git",
+		"directory": "extensions/pi-notify"
+	},
+	"homepage": "https://github.com/arichiardi/ar-llm/tree/main/extensions/pi-notify#readme"
+}

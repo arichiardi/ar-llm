@@ -1,0 +1,45 @@
+{
+	"name": "@arichiardi/pi-handoff",
+	"version": "0.1.0",
+	"description": "Pi extension that transfers context to a new focused session via /handoff, extracting what matters and generating a continuation prompt.",
+	"type": "module",
+	"license": "MIT",
+	"private": false,
+	"keywords": [
+		"pi-package",
+		"pi-extension",
+		"pi",
+		"handoff",
+		"session",
+		"context"
+	],
+	"files": [
+		"src",
+		"README.md",
+		"LICENSE"
+	],
+	"pi": {
+		"extensions": [
+			"./src/handoff.ts"
+		]
+	},
+	"scripts": {
+		"typecheck": "tsc --noEmit"
+	},
+	"peerDependencies": {
+		"@earendil-works/pi-ai": "*",
+		"@earendil-works/pi-coding-agent": "*"
+	},
+	"devDependencies": {
+		"@earendil-works/pi-ai": "0.79.10",
+		"@earendil-works/pi-coding-agent": "0.79.10",
+		"@types/node": "^25.6.0",
+		"typescript": "^6.0.3"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/arichiardi/ar-llm.git",
+		"directory": "extensions/pi-handoff"
+	},
+	"homepage": "https://github.com/arichiardi/ar-llm/tree/main/extensions/pi-handoff#readme"
+}

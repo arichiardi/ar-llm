@@ -21,7 +21,7 @@ DEBUG_LOG="${DEBUG_LOG/#\~/$HOME}"
 BOOTSTRAP="(progn
   (add-to-list 'load-path \"$EXT_DIR\")
   (require 'org)
-  (require 'org-roam-pi-memory)
+  (load (expand-file-name \"org-roam-pi-memory\" (car load-path)) nil t)
   (org-roam-pi-apply-config \"$CONFIG_FILE\"))"
 
 _debug() {
@@ -43,8 +43,7 @@ STDOUT_FILE="$TMPDIR_QUERY/stdout"
 STDERR_FILE="$TMPDIR_QUERY/stderr"
 trap "rm -rf '$TMPDIR_QUERY'" EXIT
 
-emacs --batch \
-  --eval "(progn $BOOTSTRAP (condition-case err (princ (progn $ELISP_EXPR)) (error (princ (format \"*ERROR* %s\" (error-message-string err))))))" \
+emacsclient --eval "(progn $BOOTSTRAP (condition-case err (princ (progn $ELISP_EXPR)) (error (princ (format \"*ERROR* %s\" (error-message-string err))))))" \
   >"$STDOUT_FILE" 2>"$STDERR_FILE" || true
 
 RAW=$(cat "$STDOUT_FILE")

@@ -1,6 +1,6 @@
 # Pi Extensions for the Pi Coding Agent
 
-[![npm scope](https://img.shields.io/badge/npm-%40arichiardi-blue)](https://www.npmjs.com/~arichiardi) [![License: Unlicense](https://img.shields.io/badge/license-Unlicense-blue.svg)](./LICENSE) [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](./extensions/pi-handoff/LICENSE)
+[![npm scope](https://img.shields.io/badge/npm-%40ar--llm-blue)](https://www.npmjs.com/org/ar-llm)
 
 Personal [Pi](https://pi.dev) extension packages for the Pi coding agent. Each package is independently installable under the `@ar-llm` npm scope.
 

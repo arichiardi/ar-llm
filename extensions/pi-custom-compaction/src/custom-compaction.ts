@@ -82,7 +82,7 @@ function loadConfig(): CompactionConfig | null {
   if (!fs.existsSync(filePath)) {
     console.error(
       `[custom-compaction] Config file not found at ${filePath}.\n` +
-      `Using hardcoded defaults. Create the file to configure provider/model/prompt.`
+      `Custom compaction will be skipped. Create the file to enable it.`
     );
     return null;
   }
@@ -93,7 +93,7 @@ function loadConfig(): CompactionConfig | null {
   if (!parsed["compaction-model"] || !parsed["compaction-model"].provider || !parsed["compaction-model"].id) {
     console.error(
       `[custom-compaction] Config missing "compaction-model.provider" or "compaction-model.id" in ${filePath}.\n` +
-      `Using hardcoded defaults.`
+      `Custom compaction will be skipped.`
     );
     return null;
   }
@@ -136,11 +136,13 @@ const promptConfig = CONFIG?.prompt ?? {
 // ============================================================
 
 const DEBUG = false;
-const DEBUG_LOG = "/tmp/custom-compaction-debug.log";
+const AR_LLM_TMP = path.join(os.tmpdir(), "ar-llm");
+const DEBUG_LOG = path.join(AR_LLM_TMP, "custom-compaction.log");
+
 function log(msg: string) {
-  if (DEBUG) {
-    fs.appendFileSync(DEBUG_LOG, `${new Date().toISOString()} ${msg}\n`);
-  }
+  if (!DEBUG) return;
+  fs.mkdirSync(AR_LLM_TMP, { recursive: true });
+  fs.appendFileSync(DEBUG_LOG, `${new Date().toISOString()} ${msg}\n`);
 }
 
 export default function (pi: ExtensionAPI) {

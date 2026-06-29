@@ -1,5 +1,5 @@
 {
-	"name": "@arichiardi/pi-notify",
+	"name": "@ar-llm/pi-notify",
 	"version": "0.1.0",
 	"description": "Pi extension that sends a native terminal notification (OSC 777 / OSC 99 / Windows toast) when the agent finishes and is waiting for input.",
 	"type": "module",

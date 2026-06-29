@@ -1,5 +1,5 @@
 {
-	"name": "@arichiardi/pi-plan-mode",
+	"name": "@ar-llm/pi-plan-mode",
 	"version": "0.1.0",
 	"description": "Pi extension that adds a read-only plan mode for safe code exploration, step tracking, and constrained tool execution.",
 	"type": "module",

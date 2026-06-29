@@ -1,5 +1,5 @@
 {
-	"name": "@arichiardi/pi-custom-compaction",
+	"name": "@ar-llm/pi-custom-compaction",
 	"version": "0.1.0",
 	"description": "Pi extension that replaces default compaction with a full LLM-generated summary, with configurable model and per-provider request params.",
 	"type": "module",

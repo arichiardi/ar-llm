@@ -1,5 +1,5 @@
 {
-	"name": "@arichiardi/pi-skill-request-params",
+	"name": "@ar-llm/pi-skill-request-params",
 	"version": "0.1.0",
 	"description": "Pi extension that injects per-skill, per-model, and per-provider request parameters (temperature, top_p, thinking, etc.) into every provider payload.",
 	"type": "module",

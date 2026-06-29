@@ -36,19 +36,105 @@
  */
 
 import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
 import { complete } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { convertToLlm, serializeConversation } from "@earendil-works/pi-coding-agent";
 
 // ============================================================
-// Configuration
+// Configuration types
 // ============================================================
 
-/** Compaction model provider and model ID — change these to use a different summarization model. */
-const COMPACTION_PROVIDER = "github-copilot";
-const COMPACTION_MODEL = "gpt-5.4-mini";
+interface RequestParamsConfig {
+  providers: Record<string, {
+    [key: string]: unknown;
+    models?: Record<string, Record<string, unknown>>;
+  }>;
+}
 
-/** Set to false to disable debug logging to /tmp/custom-compaction-debug.log */
+interface CompactionConfig {
+  "compaction-model": {
+    provider: string;
+    id: string;
+  };
+  "request-params"?: RequestParamsConfig;
+  prompt?: {
+    system: string;
+    user: string;
+    includePreviousSummary: boolean;
+  };
+}
+
+// ============================================================
+// Config loading
+// ============================================================
+
+function resolveConfigDir(): string {
+  return process.env.PI_CODING_AGENT_DIR
+    || path.join(os.homedir(), ".config", "pi", "agent");
+}
+
+function loadConfig(): CompactionConfig | null {
+  const dir = resolveConfigDir();
+  const filePath = path.join(dir, "ar-llm", "custom-compaction.json");
+
+  if (!fs.existsSync(filePath)) {
+    console.error(
+      `[custom-compaction] Config file not found at ${filePath}.\n` +
+      `Using hardcoded defaults. Create the file to configure provider/model/prompt.`
+    );
+    return null;
+  }
+
+  const raw = fs.readFileSync(filePath, "utf-8");
+  const parsed: CompactionConfig = JSON.parse(raw);
+
+  if (!parsed["compaction-model"] || !parsed["compaction-model"].provider || !parsed["compaction-model"].id) {
+    console.error(
+      `[custom-compaction] Config missing "compaction-model.provider" or "compaction-model.id" in ${filePath}.\n` +
+      `Using hardcoded defaults.`
+    );
+    return null;
+  }
+
+  return parsed;
+}
+
+let CONFIG: CompactionConfig | null = null;
+try {
+  CONFIG = loadConfig();
+} catch (err: any) {
+  console.error(err.message);
+  console.error("[custom-compaction] Extension disabled due to config error.");
+}
+
+// Resolve effective request params for the compaction model (provider + model)
+function resolveRequestParams(): Record<string, unknown> {
+  const rpCfg = CONFIG?.["request-params"];
+  if (!rpCfg || !compactionModel) return {};
+
+  const providerCfg = rpCfg.providers?.[compactionModel.provider];
+  if (!providerCfg) return {};
+
+  // Extract non-"models" keys as provider-level params
+  const { models, ...providerParams } = providerCfg;
+  const modelParams = providerCfg.models?.[compactionModel.id] ?? {};
+  return Object.assign({}, providerParams, modelParams);
+}
+
+// Effective values — null if no config, handler will skip
+const compactionModel = CONFIG?.["compaction-model"] ?? null;
+const promptConfig = CONFIG?.prompt ?? {
+  system: "You are a conversation summarizer. Create a comprehensive summary that captures all information needed to continue the work effectively.",
+  user: `Summarize this conversation with clear sections covering:\n\n1. Main goals and objectives discussed\n2. Key decisions made and their rationale\n3. Important code changes, file modifications, or technical details\n4. Current state of any ongoing work\n5. Any blockers, issues, or open questions\n6. Next steps that were planned or suggested\n\nBe thorough but concise. This summary will replace the ENTIRE conversation history.\n\nFormat as structured markdown with clear sections.{previous_summary}\n<conversation>\n{conversation}\n</conversation>`,
+  includePreviousSummary: true,
+};
+
+// ============================================================
+// Debug logging
+// ============================================================
+
 const DEBUG = false;
 const DEBUG_LOG = "/tmp/custom-compaction-debug.log";
 function log(msg: string) {
@@ -59,6 +145,11 @@ function log(msg: string) {
 
 export default function (pi: ExtensionAPI) {
 	pi.on("session_before_compact", async (event, ctx) => {
+		// No config — skip custom compaction, let pi use its default
+		if (!compactionModel) {
+			return;
+		}
+
 		ctx.ui.notify("Custom compaction extension triggered", "info");
         log("session_before_compact triggered");
 
@@ -67,10 +158,10 @@ export default function (pi: ExtensionAPI) {
         log(`messagesToSummarize: ${messagesToSummarize.length}, turnPrefixMessages: ${turnPrefixMessages.length}, tokensBefore: ${tokensBefore}`);
         log(`firstKeptEntryId: ${JSON.stringify(firstKeptEntryId)}, previousSummary length: ${previousSummary?.length ?? 'none'}`);
 
-		const model = ctx.modelRegistry.find(COMPACTION_PROVIDER, COMPACTION_MODEL);
+		const model = ctx.modelRegistry.find(compactionModel.provider, compactionModel.id);
 		if (!model) {
-			log(`Model not found: ${COMPACTION_PROVIDER}/${COMPACTION_MODEL}`);
-			ctx.ui.notify(`Could not find compaction model ${COMPACTION_PROVIDER}/${COMPACTION_MODEL}, using default compaction`, "warning");
+			log(`Model not found: ${compactionModel.provider}/${compactionModel.id}`);
+			ctx.ui.notify(`Could not find compaction model ${compactionModel.provider}/${compactionModel.id}, using default compaction`, "warning");
 			return;
 		}
         log(`Found model: ${model.provider}/${model.id}`);
@@ -100,8 +191,14 @@ export default function (pi: ExtensionAPI) {
 		// Convert messages to readable text format
 		const conversationText = serializeConversation(convertToLlm(allMessages));
 
-		// Include previous summary context if available
-		const previousContext = previousSummary ? `\n\nPrevious session summary for context:\n${previousSummary}` : "";
+		// Build prompt from config template
+		let previousContext = "";
+		if (promptConfig.includePreviousSummary && previousSummary) {
+			previousContext = `\n\nPrevious session summary for context:\n${previousSummary}`;
+		}
+		const userPrompt = promptConfig.user
+			.replace("{previous_summary}", previousContext)
+			.replace("{conversation}", conversationText);
 
 		// Build messages that ask for a comprehensive summary
 		const summaryMessages = [
@@ -110,22 +207,7 @@ export default function (pi: ExtensionAPI) {
 				content: [
 					{
 						type: "text" as const,
-						text: `You are a conversation summarizer. Create a comprehensive summary of this conversation that captures:${previousContext}
-
-1. The main goals and objectives discussed
-2. Key decisions made and most importantly their rationale
-3. Important code changes, file modifications, or technical details
-4. Current state of any ongoing work
-5. Any blockers, issues, or open questions
-6. Next steps that were planned or suggested
-
-Be thorough but concise. The summary will replace the ENTIRE conversation history, so include all information needed to continue the work effectively.
-
-Format the summary as structured markdown with clear sections.
-
-<conversation>
-${conversationText}
-</conversation>`,
+						text: `${promptConfig.system}\n\n${userPrompt}`,
 					},
 				],
 				timestamp: Date.now(),
@@ -134,15 +216,18 @@ ${conversationText}
 
 		try {
 			// Pass signal to honor abort requests (e.g., user cancels compaction)
+			const effectiveParams = {
+				apiKey: auth.apiKey,
+				headers: auth.headers,
+				maxTokens: 8192,
+				signal,
+				...resolveRequestParams(),
+			};
+
 			const response = await complete(
 				model,
 				{ messages: summaryMessages },
-				{
-					apiKey: auth.apiKey,
-					headers: auth.headers,
-					maxTokens: 8192,
-					signal,
-				},
+				effectiveParams,
 			);
 			// Check for API-level errors (model not found, auth issues, etc.)
 			if ((response as any).stopReason === "error" || (response as any).errorMessage) {

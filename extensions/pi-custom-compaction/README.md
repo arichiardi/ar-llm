@@ -1,19 +1,19 @@
-# @arichiardi/pi-custom-compaction
+# @ar-llm/pi-custom-compaction
 
-[![npm](https://img.shields.io/npm/v/@arichiardi/pi-custom-compaction)](https://www.npmjs.com/package/@arichiardi/pi-custom-compaction) [![Unlicense](https://img.shields.io/badge/license-Unlicense-blue.svg)](./LICENSE)
+[![npm](https://img.shields.io/npm/v/@ar-llm/pi-custom-compaction)](https://www.npmjs.com/package/@ar-llm/pi-custom-compaction) [![Unlicense](https://img.shields.io/badge/license-Unlicense-blue.svg)](./LICENSE)
 
 Pi extension that replaces default compaction with a full LLM-generated summary. Configurable model, per-provider/per-model request params, and custom prompt templates.
 
 ## Install
 
 ```bash
-pi install 'npm:@arichiardi/pi-custom-compaction'
+pi install 'npm:@ar-llm/pi-custom-compaction'
 ```
 
 Or try without installing:
 
 ```bash
-pi -e 'npm:@arichiardi/pi-custom-compaction'
+pi -e 'npm:@ar-llm/pi-custom-compaction'
 ```
 
 ## License

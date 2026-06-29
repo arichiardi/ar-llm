@@ -1,4 +1,4 @@
-# @arichiardi/pi-notify
+# @ar-llm/pi-notify
 
 [![MIT](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
 
@@ -7,13 +7,13 @@ Pi extension that sends a native terminal notification (OSC 777 / OSC 99 / Windo
 ## Install
 
 ```bash
-pi install 'npm:@arichiardi/pi-notify'
+pi install 'npm:@ar-llm/pi-notify'
 ```
 
 Or try without installing:
 
 ```bash
-pi -e 'npm:@arichiardi/pi-notify'
+pi -e 'npm:@ar-llm/pi-notify'
 ```
 
 ## License

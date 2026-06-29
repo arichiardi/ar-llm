@@ -1,4 +1,4 @@
-# @arichiardi/pi-plan-mode
+# @ar-llm/pi-plan-mode
 
 [![MIT](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
 
@@ -7,13 +7,13 @@ Pi extension that adds a read-only plan mode for safe code exploration. Restrict
 ## Install
 
 ```bash
-pi install 'npm:@arichiardi/pi-plan-mode'
+pi install 'npm:@ar-llm/pi-plan-mode'
 ```
 
 Or try without installing:
 
 ```bash
-pi -e 'npm:@arichiardi/pi-plan-mode'
+pi -e 'npm:@ar-llm/pi-plan-mode'
 ```
 
 ## License

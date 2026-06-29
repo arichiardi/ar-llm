@@ -285,8 +285,10 @@ function applySkillParams(payload: any, params: SkillRequestParams): any {
     }
   }
 
-  // Remove top-level enable_thinking — it's handled by chat_template_kwargs
-  delete result.enable_thinking;
+  // Remove top-level enable_thinking only when explicitly controlling thinking
+  if (params.chat_template_kwargs?.enable_thinking !== undefined) {
+    delete result.enable_thinking;
+  }
 
   return result;
 }
@@ -301,8 +303,8 @@ function formatParams(params: SkillRequestParams): string {
   if (params.repetition_penalty !== undefined) parts.push(`rep=${params.repetition_penalty}`);
   if (params.chat_template_kwargs) {
     const { enable_thinking, preserve_thinking } = params.chat_template_kwargs;
-    if (!enable_thinking) parts.push(`th=off`);
-    else {
+    if (enable_thinking === false) parts.push(`th=off`);
+    else if (enable_thinking === true) {
       const budget = THINKING_BUDGET_KEYS.map(k => params[k]).find(v => v !== undefined);
       const suffix = budget !== undefined ? `(${budget}tok)` : "";
       parts.push(preserve_thinking ? `th=preserve${suffix}` : `th=on${suffix}`);
@@ -465,7 +467,7 @@ export default function (pi: ExtensionAPI) {
       log(`Applied: ${label}`);
       return modifiedPayload;
     }
-    ctx.ui.setStatus("skill-params", "");
+    ctx.ui.setStatus("skill-params", undefined);
     return undefined;
   });
 

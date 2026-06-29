@@ -219,11 +219,11 @@ export default function (pi: ExtensionAPI) {
 		try {
 			// Pass signal to honor abort requests (e.g., user cancels compaction)
 			const effectiveParams = {
+				...resolveRequestParams(),
 				apiKey: auth.apiKey,
 				headers: auth.headers,
 				maxTokens: 8192,
 				signal,
-				...resolveRequestParams(),
 			};
 
 			const response = await complete(

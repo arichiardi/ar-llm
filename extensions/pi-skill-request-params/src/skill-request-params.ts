@@ -350,12 +350,13 @@ export default function (pi: ExtensionAPI) {
   // Reverse lookup: skill file path -> skill name (populated in before_agent_start)
   let skillPathToName: Map<string, string> = new Map();
 
-  const DEBUG_LOG = "/tmp/skill-request-params-debug.log";
   const DEBUG = false;
+  const AR_LLM_TMP = path.join(os.tmpdir(), "ar-llm");
+  const DEBUG_LOG = path.join(AR_LLM_TMP, "skill-request-params.log");
   function log(msg: string) {
-    if (DEBUG) {
-      fs.appendFileSync(DEBUG_LOG, `${new Date().toISOString()} ${msg}\n`);
-    }
+    if (!DEBUG) return;
+    fs.mkdirSync(AR_LLM_TMP, { recursive: true });
+    fs.appendFileSync(DEBUG_LOG, `${new Date().toISOString()} ${msg}\n`);
   }
 
   // Track active provider + model whenever the user switches model.

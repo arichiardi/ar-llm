@@ -2,18 +2,18 @@
 	"name": "ar-llm",
 	"version": "0.1.0",
 	"private": true,
-	"description": "Monorepo for @arichiardi pi extension packages and LLM configuration files.",
+	"description": "Monorepo for @ar-llm pi extension packages and LLM configuration files.",
 	"type": "module",
 	"workspaces": [
 		"extensions/*"
 	],
 	"scripts": {
 		"typecheck": "npm run typecheck --workspaces",
-		"pack:custom-compaction": "npm --workspace @arichiardi/pi-custom-compaction pack --dry-run",
-		"pack:skill-request-params": "npm --workspace @arichiardi/pi-skill-request-params pack --dry-run",
-		"pack:handoff": "npm --workspace @arichiardi/pi-handoff pack --dry-run",
-		"pack:notify": "npm --workspace @arichiardi/pi-notify pack --dry-run",
-		"pack:plan-mode": "npm --workspace @arichiardi/pi-plan-mode pack --dry-run"
+		"pack:custom-compaction": "npm --workspace @ar-llm/pi-custom-compaction pack --dry-run",
+		"pack:skill-request-params": "npm --workspace @ar-llm/pi-skill-request-params pack --dry-run",
+		"pack:handoff": "npm --workspace @ar-llm/pi-handoff pack --dry-run",
+		"pack:notify": "npm --workspace @ar-llm/pi-notify pack --dry-run",
+		"pack:plan-mode": "npm --workspace @ar-llm/pi-plan-mode pack --dry-run"
 	},
 	"devDependencies": {
 		"@earendil-works/pi-coding-agent": "0.79.10",

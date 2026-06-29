@@ -2,17 +2,17 @@
 
 [![npm scope](https://img.shields.io/badge/npm-%40arichiardi-blue)](https://www.npmjs.com/~arichiardi) [![License: Unlicense](https://img.shields.io/badge/license-Unlicense-blue.svg)](./LICENSE) [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](./extensions/pi-handoff/LICENSE)
 
-Personal [Pi](https://pi.dev) extension packages for the Pi coding agent. Each package is independently installable under the `@arichiardi` npm scope.
+Personal [Pi](https://pi.dev) extension packages for the Pi coding agent. Each package is independently installable under the `@ar-llm` npm scope.
 
 ## Extensions
 
 | Package | Description |
 | --- | --- |
-| [`@arichiardi/pi-custom-compaction`](./extensions/pi-custom-compaction/README.md) | LLM-powered session compaction with configurable model and request params |
-| [`@arichiardi/pi-skill-request-params`](./extensions/pi-skill-request-params/README.md) | Per-skill, per-model, per-provider request parameter injection |
-| [`@arichiardi/pi-handoff`](./extensions/pi-handoff/README.md) | Context handoff to new focused sessions via `/handoff` |
-| [`@arichiardi/pi-notify`](./extensions/pi-notify/README.md) | Terminal notifications when the agent is done and waiting for input |
-| [`@arichiardi/pi-plan-mode`](./extensions/pi-plan-mode/README.md) | Read-only plan mode with step tracking and constrained tool execution |
+| [`@ar-llm/pi-custom-compaction`](./extensions/pi-custom-compaction/README.md) | LLM-powered session compaction with configurable model and request params |
+| [`@ar-llm/pi-skill-request-params`](./extensions/pi-skill-request-params/README.md) | Per-skill, per-model, per-provider request parameter injection |
+| [`@ar-llm/pi-handoff`](./extensions/pi-handoff/README.md) | Context handoff to new focused sessions via `/handoff` |
+| [`@ar-llm/pi-notify`](./extensions/pi-notify/README.md) | Terminal notifications when the agent is done and waiting for input |
+| [`@ar-llm/pi-plan-mode`](./extensions/pi-plan-mode/README.md) | Read-only plan mode with step tracking and constrained tool execution |
 
 See each package's README for install instructions and details.
 

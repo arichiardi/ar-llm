@@ -1,4 +1,4 @@
-# @arichiardi/pi-skill-request-params
+# @ar-llm/pi-skill-request-params
 
 [![Unlicense](https://img.shields.io/badge/license-Unlicense-blue.svg)](./LICENSE)
 
@@ -7,13 +7,13 @@ Pi extension that injects per-skill, per-model, and per-provider request paramet
 ## Install
 
 ```bash
-pi install 'npm:@arichiardi/pi-skill-request-params'
+pi install 'npm:@ar-llm/pi-skill-request-params'
 ```
 
 Or try without installing:
 
 ```bash
-pi -e 'npm:@arichiardi/pi-skill-request-params'
+pi -e 'npm:@ar-llm/pi-skill-request-params'
 ```
 
 ## License

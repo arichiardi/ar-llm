@@ -1,4 +1,4 @@
-# @arichiardi/pi-handoff
+# @ar-llm/pi-handoff
 
 [![MIT](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
 
@@ -7,13 +7,13 @@ Pi extension that transfers context to a new focused session via `/handoff`. Ext
 ## Install
 
 ```bash
-pi install 'npm:@arichiardi/pi-handoff'
+pi install 'npm:@ar-llm/pi-handoff'
 ```
 
 Or try without installing:
 
 ```bash
-pi -e 'npm:@arichiardi/pi-handoff'
+pi -e 'npm:@ar-llm/pi-handoff'
 ```
 
 ## License

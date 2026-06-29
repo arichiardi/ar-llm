@@ -1,6 +1,6 @@
 # ar-llm — Pi Extensions
 
-Personal [Pi](https://pi.dev) extension packages for the Pi coding agent, published under the `@arichiardi` npm scope.
+Personal [Pi](https://pi.dev) extension packages for the Pi coding agent, published under the `@ar-llm` npm scope.
 
 ## Repository structure
 
@@ -76,7 +76,7 @@ Publishing follows a two-step staged workflow: an agent stages the package, a hu
    ```
 3. **List staged packages** to get the stage ID:
    ```bash
-   npm stage list @arichiardi/pi-<name>
+   npm stage list @ar-llm/pi-<name>
    ```
 4. **Inspect before approving** (optional):
    ```bash

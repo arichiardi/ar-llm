@@ -11,9 +11,10 @@ Under the hood it uses **Crawl4AI** for extraction. Some JavaScript-heavy or bot
 
 ## Usage Guidelines
 
-- **No post-processing**: Parse the result directly in your LLM context. Do not pipe output through `jq`, `sed`, `grep -v`, or any other post-processing tool beyond the required `grep "^data:"` to extract SSE events.
-- **Session reuse**: Initialize once, reuse `$SID` for all subsequent tool calls in the same script.
-- **Always use `timeout`**: Prevent hanging on slow pages. Increase for large sites.
+- **No post-processing**: Parse the result directly in your LLM context. Do not pipe output through `jq`, `sed`, or `grep`.
+- **No session management**: The server returns plain JSON — no SSE, no session ID required.
+- **Always set `timeout`**: The default per-URL timeout is only 15 seconds, which is often too short. Always pass **at least 45 seconds** (`"timeout": 45`) to avoid spurious errors.
+- **Use `output_format`**: The correct parameter name is `output_format` (not `format` or `outputFormat`). Values: `"markdown"` (default) or `"json"`.
 - **Verify tool names**: If you get `"Unknown tool"` errors, double-check the name (`crawl`, `crawl_site`, `search`).
 - **URL encoding**: Use `jq -Rs @uri` for safe URL-encoding when needed.
 - **Bot protection**: Sites with heavy JavaScript rendering or bot protection may return crawl errors even though the request succeeds.
@@ -43,66 +44,46 @@ Output formats for crawl tools:
 
 ## Workflow
 
-The MCP server requires a two-step process: **(1) initialize** a session, then **(2) call tools** using the session ID from the response headers.
-
-### Step 1 — Initialize Session
-
-```bash
-curl -sN "$MCP_SEARCH_URL" \
-  -H "Content-Type: application/json" \
-  -H "Accept: application/json, text/event-stream" \
-  -D /tmp/mcp_h.txt \
-  -d '{
-    "jsonrpc": "2.0",
-    "id": 1,
-    "method": "initialize",
-    "params": {
-      "protocolVersion": "2024-11-01",
-      "capabilities": {},
-      "clientInfo": { "name": "pi", "version": "1.0.0" }
-    }
-  }' > /dev/null 2>&1
-
-SID=$(grep mcp-session-id /tmp/mcp_h.txt | tr -d '\r' | awk '{print $2}')
-```
-
-This stores the session ID (`Mcp-Session-Id`) from the HTTP response headers into `$SID`.
-
-### Step 2 — Call a Tool
-
-All subsequent requests must include both the `Mcp-Session-Id` header and `Accept: application/json, text/event-stream`. Responses come as SSE events prefixed with `data:`.
+All tool calls are a single POST to `$MCP_SEARCH_URL`. No session initialization needed — the server returns plain JSON directly.
 
 #### Crawl a URL
 
 ```bash
-timeout 30 curl -sN "$MCP_SEARCH_URL" \
+timeout 60 curl -s "$MCP_SEARCH_URL" \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
-  -H "Mcp-Session-Id: $SID" \
-  --data-raw '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"crawl","arguments":{"urls":["https://example.com"]}}}' \
-  2>&1 | grep "^data:" | head -20
+  -H "Authorization: Bearer $MCP_API_TOKEN" \
+  --data-raw '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"crawl","arguments":{"urls":["https://example.com"],"timeout":45}}}'
 ```
 
 #### Crawl Multiple URLs
 
 ```bash
-timeout 30 curl -sN "$MCP_SEARCH_URL" \
+timeout 60 curl -s "$MCP_SEARCH_URL" \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
-  -H "Mcp-Session-Id: $SID" \
-  --data-raw '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"crawl","arguments":{"urls":["https://a.com","https://b.com"]}}}' \
-  2>&1 | grep "^data:" | head -20
+  -H "Authorization: Bearer $MCP_API_TOKEN" \
+  --data-raw '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"crawl","arguments":{"urls":["https://a.com","https://b.com"],"timeout":45}}}'
+```
+
+#### Crawl with JSON output
+
+```bash
+timeout 60 curl -s "$MCP_SEARCH_URL" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "Authorization: Bearer $MCP_API_TOKEN" \
+  --data-raw '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"crawl","arguments":{"urls":["https://example.com"],"timeout":45,"output_format":"json"}}}'
 ```
 
 #### Search the Web
 
 ```bash
-timeout 30 curl -sN "$MCP_SEARCH_URL" \
+timeout 60 curl -s "$MCP_SEARCH_URL" \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
-  -H "Mcp-Session-Id: $SID" \
-  --data-raw '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"search","arguments":{"query":"your search query"}}}' \
-  2>&1 | grep "^data:" | head -20
+  -H "Authorization: Bearer $MCP_API_TOKEN" \
+  --data-raw '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"search","arguments":{"query":"your search query"}}}'
 ```
 
 #### Crawl an Entire Site
@@ -110,12 +91,11 @@ timeout 30 curl -sN "$MCP_SEARCH_URL" \
 **⚠️ WARNING: `crawl_site` is extremely resource-intensive.** It crawls entire websites recursively and can consume significant CPU, memory, and network bandwidth on the MCP server. **Always ask the user for explicit confirmation before using this tool.** Prefer `crawl` with specific URLs whenever possible.
 
 ```bash
-timeout 60 curl -sN "$MCP_SEARCH_URL" \
+timeout 180 curl -s "$MCP_SEARCH_URL" \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
-  -H "Mcp-Session-Id: $SID" \
-  --data-raw '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"crawl_site","arguments":{"url":"https://example.com","maxDepth":2,"maxPages":10}}}' \
-  2>&1 | grep "^data:" | head -20
+  -H "Authorization: Bearer $MCP_API_TOKEN" \
+  --data-raw '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"crawl_site","arguments":{"url":"https://example.com","max_depth":2,"max_pages":10,"timeout":120}}}'
 ```
 
 

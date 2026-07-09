@@ -159,8 +159,11 @@ Called once at extension start before any other function."
 ;;;; JSON helpers
 
 (defun org-roam-pi--json (obj)
-  "Return OBJ as a JSON string."
-  (json-encode obj))
+  "Return OBJ as a JSON string.
+Converts nil/empty-list to an empty vector so the output is [] instead of null."
+  (json-encode (if (or (null obj) (and (listp obj) (not obj)))
+                    []
+                  obj)))
 
 (defun org-roam-pi--error (msg)
   "Return an error JSON object with MSG."

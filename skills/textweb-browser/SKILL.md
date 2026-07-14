@@ -11,7 +11,10 @@ The MCP endpoint is stored in the **`MCP_TEXTWEB_URL`** environment variable (st
 
 ## Usage Guidelines
 
-- **No post-processing**: Parse the result directly in your LLM context. Do not pipe output through `jq`, `sed`, `grep`, or any other tool. Responses are plain JSON.
+- **No post-processing**: Parse the result directly in your LLM context. Do not pipe output through `sed`, `grep`, or any other tool. Extract content with jq:
+  ```bash
+  curl -s "$MCP_TEXTWEB_URL" ... | jq -r '.result.content[].text'
+  ```
 - **No session initialization needed**: Each request is self-contained. Just POST JSON-RPC to `$MCP_TEXTWEB_URL`.
 - **Always use `timeout`**: Prevent hanging on slow or JS-heavy pages.
 - **Session isolation**: Pass a `session_id` to keep parallel workflows isolated from each other.
@@ -81,6 +84,7 @@ All requests are a single `POST` to `$MCP_TEXTWEB_URL` with a JSON-RPC body.
 ```bash
 timeout 30 curl -s "$MCP_TEXTWEB_URL" \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $MCP_API_TOKEN" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"textweb_navigate","arguments":{"url":"https://news.ycombinator.com"}}}'
 ```
 
@@ -91,6 +95,7 @@ The grid shows `[9]OpenAI Submits S-1 Draft to SEC` as item 1. The elements inde
 ```bash
 timeout 30 curl -s "$MCP_TEXTWEB_URL" \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $MCP_API_TOKEN" \
   -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"textweb_click","arguments":{"ref":9}}}'
 ```
 
@@ -101,64 +106,72 @@ The response delivers the full article page — URL, title, rendered body text, 
 ### Navigate to a URL
 
 ```bash
-timeout 30 curl -sN "$MCP_TEXTWEB_URL" \
+timeout 30 curl -s "$MCP_TEXTWEB_URL" \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $MCP_API_TOKEN" \
   --data-raw '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"textweb_navigate","arguments":{"url":"https://example.com"}}}'
 ```
 
 ### Click an Element
 
 ```bash
-timeout 15 curl -sN "$MCP_TEXTWEB_URL" \
+timeout 15 curl -s "$MCP_TEXTWEB_URL" \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $MCP_API_TOKEN" \
   --data-raw '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"textweb_click","arguments":{"ref":3}}}'
 ```
 
 ### Type into a Field
 
 ```bash
-timeout 15 curl -sN "$MCP_TEXTWEB_URL" \
+timeout 15 curl -s "$MCP_TEXTWEB_URL" \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $MCP_API_TOKEN" \
   --data-raw '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"textweb_type","arguments":{"ref":7,"text":"hello world"}}}'
 ```
 
 ### Select a Dropdown Option
 
 ```bash
-timeout 15 curl -sN "$MCP_TEXTWEB_URL" \
+timeout 15 curl -s "$MCP_TEXTWEB_URL" \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $MCP_API_TOKEN" \
   --data-raw '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"textweb_select","arguments":{"ref":13,"value":"Option A"}}}'
 ```
 
 ### Scroll the Page
 
 ```bash
-timeout 15 curl -sN "$MCP_TEXTWEB_URL" \
+timeout 15 curl -s "$MCP_TEXTWEB_URL" \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $MCP_API_TOKEN" \
   --data-raw '{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"textweb_scroll","arguments":{"direction":"down"}}}'
 ```
 
 ### Re-render the Current Page
 
 ```bash
-timeout 15 curl -sN "$MCP_TEXTWEB_URL" \
+timeout 15 curl -s "$MCP_TEXTWEB_URL" \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $MCP_API_TOKEN" \
   --data-raw '{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"textweb_snapshot","arguments":{}}}'
 ```
 
 ### Press a Key
 
 ```bash
-timeout 15 curl -sN "$MCP_TEXTWEB_URL" \
+timeout 15 curl -s "$MCP_TEXTWEB_URL" \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $MCP_API_TOKEN" \
   --data-raw '{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"textweb_press","arguments":{"key":"Enter"}}}'
 ```
 
 ### Wait for Dynamic Content
 
 ```bash
-timeout 30 curl -sN "$MCP_TEXTWEB_URL" \
+timeout 30 curl -s "$MCP_TEXTWEB_URL" \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $MCP_API_TOKEN" \
   --data-raw '{"jsonrpc":"2.0","id":8,"method":"tools/call","params":{"name":"textweb_wait_for","arguments":{"selector":".step-2.active","timeout_ms":5000}}}'
 ```
 
@@ -166,13 +179,15 @@ timeout 30 curl -sN "$MCP_TEXTWEB_URL" \
 
 ```bash
 # Save
-timeout 15 curl -sN "$MCP_TEXTWEB_URL" \
+timeout 15 curl -s "$MCP_TEXTWEB_URL" \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $MCP_API_TOKEN" \
   --data-raw '{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"textweb_storage_save","arguments":{"path":"/tmp/textweb-state.json"}}}'
 
 # Load
-timeout 15 curl -sN "$MCP_TEXTWEB_URL" \
+timeout 15 curl -s "$MCP_TEXTWEB_URL" \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $MCP_API_TOKEN" \
   --data-raw '{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"textweb_storage_load","arguments":{"path":"/tmp/textweb-state.json"}}}'
 ```
 
@@ -181,8 +196,9 @@ timeout 15 curl -sN "$MCP_TEXTWEB_URL" \
 Pass `session_id` to keep concurrent workflows from interfering:
 
 ```bash
-timeout 30 curl -sN "$MCP_TEXTWEB_URL" \
+timeout 30 curl -s "$MCP_TEXTWEB_URL" \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $MCP_API_TOKEN" \
   --data-raw '{"jsonrpc":"2.0","id":11,"method":"tools/call","params":{"name":"textweb_navigate","arguments":{"url":"https://example.com","session_id":"task-a"}}}'
 ```
 

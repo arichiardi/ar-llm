@@ -1,16 +1,22 @@
 ---
 name: searxncrawl-local
-description: Fetch and read web page content from a local SearXN+Crawl MCP endpoint. The server uses Crawl4AI under the hood and provides crawling, site crawling, and search tools.
+description: Fetch and read web page content from the SearXN+Crawl MCP endpoint. The server uses Crawl4AI under the hood and provides crawling, site crawling, and search tools. Endpoint is configured via MCP_SEARCH_URL (may be local or remote).
 ---
 
 # Web Page Crawling (SearXN+Crawl MCP)
 
-Fetch full text content of web pages using the local SearXN+Crawl MCP server. The endpoint is stored in the `MCP_SEARCH_URL` environment variable and communicates over **Server-Sent Events (SSE)** with session management.
+Fetch full text content of web pages using the SearXN+Crawl MCP server. The endpoint is stored in the `MCP_SEARCH_URL` environment variable (may be a remote URL or local address). Returns **plain JSON** — no SSE or session management required.
 
 Under the hood it uses **Crawl4AI** for extraction. Some JavaScript-heavy or bot-protected sites (e.g. StackOverflow, USPS tools) may return crawl errors — try simpler static pages when possible.
 
 ## Usage Guidelines
 
+- **Prefer `gh` for GitHub URLs**: If the target URL is on `github.com` (repos, issues, PRs, gists, files), use the `gh` CLI instead of `crawl`. For example:
+  - `gh issue view 123 --repo owner/repo`
+  - `gh pr view 456 --repo owner/repo`
+  - `gh api repos/owner/repo/contents/path/to/file`
+  - `gh gist view <gist-id>`
+  Only fall back to `crawl` for GitHub URLs if `gh` cannot serve the content (e.g. GitHub Pages sites, raw markdown previews).
 - **No post-processing**: Parse the result directly in your LLM context. Do not pipe output through `jq`, `sed`, or `grep`.
 - **No session management**: The server returns plain JSON — no SSE, no session ID required.
 - **Always set `timeout`**: The default per-URL timeout is only 15 seconds, which is often too short. Always pass **at least 45 seconds** (`"timeout": 45`) to avoid spurious errors.
@@ -41,6 +47,16 @@ This is extremely important — failing to aggregate will result in most searche
 Output formats for crawl tools:
 - **markdown** (default): Clean concatenated markdown
 - **json**: Full details including metadata and references
+
+## Parsing the Response
+
+Results are plain JSON. Extract text content with jq:
+
+```bash
+curl -s "$MCP_SEARCH_URL" ... | jq -r '.result.content[].text'
+```
+
+For search results, the text content is a JSON object with a `results` array — pipe through `head` to limit output.
 
 ## Workflow
 

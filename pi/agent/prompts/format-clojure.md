@@ -1,9 +1,11 @@
 ---
-description: Format Clojure files in the project.
+description: Format Clojure files using cljfmt in the project.
 argument-hint: "[FILE_1 FILE_2 ...]"
 ---
 
-Format these Clojure files using `cljfmt`: ${@:-staged files from `git diff --cached`}
+Format the following Clojure files using `cljfmt`:
+
+$@
 
 ## Steps
 
@@ -11,7 +13,7 @@ Format these Clojure files using `cljfmt`: ${@:-staged files from `git diff --ca
 2. If a `.cljfmt.edn` file exists, use its settings as the primary source of truth for formatting rules (indentation, line width, whitespace, etc.).
 3. If NO `.cljfmt.edn` file is found, you must STOP processing immediately and return an error message stating that the configuration file is missing. Do NOT apply standard defaults or proceed with formatting.
 4. Identify the files to format:
-   - If files were passed as arguments (`$@`), format only those files.
+   - If files were passed as arguments (`$1`, ...), format only those files.
    - Otherwise, identify only the files that are currently staged in Git (modified and added to the index) and format those.
 5. Process and format ONLY the identified Clojure files (.clj) using the `cljfmt` tool and the loaded configuration.
 6. Check for any modified Clojure files that are NOT staged (only applies when no files were passed as arguments).

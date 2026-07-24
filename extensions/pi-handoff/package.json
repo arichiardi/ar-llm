@@ -1,6 +1,6 @@
 {
 	"name": "@ar-llm/pi-handoff",
-	"version": "0.1.0",
+	"version": "0.2.0",
 	"description": "Pi extension that transfers context to a new focused session via /handoff, extracting what matters and generating a continuation prompt.",
 	"type": "module",
 	"license": "MIT",

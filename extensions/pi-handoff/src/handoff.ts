@@ -42,6 +42,9 @@ import { uuidv7 } from "@earendil-works/pi-ai";
 import { complete, type Message } from "@earendil-works/pi-ai/compat";
 import type { ExtensionAPI, SessionEntry } from "@earendil-works/pi-coding-agent";
 import { BorderedLoader, convertToLlm, serializeConversation } from "@earendil-works/pi-coding-agent";
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
 
 const SYSTEM_PROMPT = `You are a context transfer assistant. Given a conversation history and the user's goal for a new thread, generate a focused prompt that:
 
@@ -104,6 +107,15 @@ function getHandoffMessages(branch: SessionEntry[]): AgentMessage[] {
 }
 
 export default function (pi: ExtensionAPI) {
+	const DEBUG = true;
+	const AR_LLM_TMP = path.join(os.tmpdir(), "ar-llm");
+	const DEBUG_LOG = path.join(AR_LLM_TMP, "pi-handoff.log");
+	function log(msg: string) {
+		if (!DEBUG) return;
+		fs.mkdirSync(AR_LLM_TMP, { recursive: true });
+		fs.appendFileSync(DEBUG_LOG, `${new Date().toISOString()} ${msg}\n`);
+	}
+
 	pi.registerCommand("handoff", {
 		description: "Transfer context to a new focused session",
 		handler: async (args, ctx) => {
@@ -123,9 +135,13 @@ export default function (pi: ExtensionAPI) {
 				return;
 			}
 
+			log(`handoff invoked: goal="${goal}"`);
+			log(`model: ${JSON.stringify(ctx.model)}`);
+
 			// Gather conversation context from current branch. If the branch was compacted,
 			// include the compaction summary plus entries from firstKeptEntryId onward.
 			const messages = getHandoffMessages(ctx.sessionManager.getBranch());
+			log(`messages gathered: ${messages.length}`);
 
 			if (messages.length === 0) {
 				ctx.ui.notify("No conversation to hand off", "error");
@@ -135,6 +151,7 @@ export default function (pi: ExtensionAPI) {
 			// Convert to LLM format and serialize
 			const llmMessages = convertToLlm(messages);
 			const conversationText = serializeConversation(llmMessages);
+			log(`conversationText length: ${conversationText.length} chars`);
 			const currentSessionFile = ctx.sessionManager.getSessionFile();
 
 			// Generate the handoff prompt with loader UI.
@@ -145,6 +162,7 @@ export default function (pi: ExtensionAPI) {
 
 				const doGenerate = async () => {
 					const auth = await ctx.modelRegistry.getApiKeyAndHeaders(ctx.model!);
+					log(`auth ok: ${auth.ok}, hasApiKey: ${auth.ok ? !!auth.apiKey : false}`);
 					if (!auth.ok || !auth.apiKey) {
 						throw new Error(auth.ok ? `No API key for ${ctx.model!.provider}` : auth.error);
 					}
@@ -160,6 +178,7 @@ export default function (pi: ExtensionAPI) {
 						timestamp: Date.now(),
 					};
 
+					log(`complete() call starting, model: ${JSON.stringify(ctx.model)}`);
 					const response = await complete(
 						ctx.model!,
 						{ systemPrompt: SYSTEM_PROMPT, messages: [userMessage] },
@@ -173,19 +192,25 @@ export default function (pi: ExtensionAPI) {
 						},
 					);
 
+					log(`complete() done: stopReason=${response.stopReason}, contentParts=${response.content.length}`);
+					log(`content types: ${response.content.map((c: any) => c.type).join(", ")}`);
+
 					if (response.stopReason === "aborted") {
 						return null;
 					}
 
-					return response.content
+					const text = response.content
 						.filter((c): c is { type: "text"; text: string } => c.type === "text")
 						.map((c) => c.text)
 						.join("\n");
+					log(`extracted text length: ${text.length}`);
+					return text;
 				};
 
 				doGenerate()
 					.then(done)
 					.catch((err: unknown) => {
+						log(`generation error: ${err instanceof Error ? err.message : String(err)}`);
 						// Pass the error out so it can be surfaced after the TUI closes,
 						// rather than writing to console.error inside a live TUI render.
 						done(err instanceof Error ? err : new Error(String(err)));
@@ -195,6 +220,7 @@ export default function (pi: ExtensionAPI) {
 			});
 
 			if (result instanceof Error) {
+				log(`surfacing error to user: ${result.message}`);
 				ctx.ui.notify(`Handoff failed: ${result.message}`, "error");
 				return;
 			}
@@ -206,6 +232,7 @@ export default function (pi: ExtensionAPI) {
 
 			// Guard against empty model output before opening the editor.
 			if (result.trim() === "") {
+				log(`model returned empty output`);
 				ctx.ui.notify("Model returned empty output — try again", "error");
 				return;
 			}

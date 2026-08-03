@@ -35,18 +35,80 @@
  *   /handoff check other places that need this fix
  *
  * The generated prompt appears as a draft in the editor for review/editing.
+ *
+ * Config file (optional): ~/.config/pi/agent/ar-llm/pi-handoff.json
+ * Selects which model summarizes the handoff (typically a cheaper model than
+ * the active session model) and optionally overrides the system prompt and
+ * per-model compat flags.
+ *
+ * Example:
+ *   {
+ *     "provider": {
+ *       "github-copilot": {
+ *         "claude-haiku-4-5": {
+ *           "compat": { "forceAdaptiveThinking": false }
+ *         }
+ *       }
+ *     },
+ *     "system-prompt": "Custom summarization prompt..."
+ *   }
+ *
+ * Debug logging: set PI_HANDOFF_DEBUG=1 to log to $TMPDIR/ar-llm/pi-handoff.log
  */
 
-import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import { uuidv7 } from "@earendil-works/pi-ai";
-import { complete, type Message } from "@earendil-works/pi-ai/compat";
-import type { ExtensionAPI, SessionEntry } from "@earendil-works/pi-coding-agent";
-import { BorderedLoader, convertToLlm, serializeConversation } from "@earendil-works/pi-coding-agent";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
+import type { AgentMessage } from "@earendil-works/pi-agent-core";
+import { uuidv7 } from "@earendil-works/pi-ai";
+import type { Message } from "@earendil-works/pi-ai/compat";
+import type { ExtensionAPI, SessionEntry } from "@earendil-works/pi-coding-agent";
+import { BorderedLoader, convertToLlm, serializeConversation } from "@earendil-works/pi-coding-agent";
 
-const SYSTEM_PROMPT = `You are a context transfer assistant. Given a conversation history and the user's goal for a new thread, generate a focused prompt that:
+// ============================================================
+// Configuration types
+// ============================================================
+
+interface HandoffConfig {
+	/** Provider-specific model overrides (compat, etc.) keyed by provider. */
+	"provider"?: Record<string, Record<string, { compat?: Record<string, unknown> }>>;
+	/** Override the system prompt used for summarization. */
+	"system-prompt"?: string;
+}
+
+// ============================================================
+// Config loading
+// ============================================================
+
+function resolveConfigDir(): string {
+	return process.env.PI_CODING_AGENT_DIR
+		|| path.join(os.homedir(), ".config", "pi", "agent");
+}
+
+function loadConfig(): HandoffConfig | null {
+	const dir = resolveConfigDir();
+	const filePath = path.join(dir, "ar-llm", "pi-handoff.json");
+
+	if (!fs.existsSync(filePath)) {
+		return null;
+	}
+
+	const raw = fs.readFileSync(filePath, "utf-8");
+	return JSON.parse(raw) as HandoffConfig;
+}
+
+let CONFIG: HandoffConfig | null = null;
+try {
+	CONFIG = loadConfig();
+} catch (err: any) {
+	console.error(`[pi-handoff] Failed to load config: ${err.message}`);
+}
+
+// ============================================================
+// Default system prompt
+// ============================================================
+
+const DEFAULT_SYSTEM_PROMPT = `You are a context transfer assistant. Given a conversation history and the user's goal for a new thread, generate a focused prompt that:
 
 1. Summarizes relevant context from the conversation (decisions made, approaches taken, key findings)
 2. Lists any relevant files that were discussed or modified
@@ -67,6 +129,26 @@ Files involved:
 
 ## Task
 [Clear description of what to do next based on user's goal]`;
+
+const SYSTEM_PROMPT = CONFIG?.["system-prompt"] ?? DEFAULT_SYSTEM_PROMPT;
+
+// ============================================================
+// Debug logging
+// ============================================================
+
+const DEBUG = process.env.PI_HANDOFF_DEBUG === "1" || process.env.PI_HANDOFF_DEBUG === "true";
+const AR_LLM_TMP = path.join(os.tmpdir(), "ar-llm");
+const DEBUG_LOG = path.join(AR_LLM_TMP, "pi-handoff.log");
+
+function log(msg: string) {
+	if (!DEBUG) return;
+	fs.mkdirSync(AR_LLM_TMP, { recursive: true });
+	fs.appendFileSync(DEBUG_LOG, `${new Date().toISOString()} ${msg}\n`);
+}
+
+// ============================================================
+// Session entry helpers
+// ============================================================
 
 function entryToMessage(entry: SessionEntry): AgentMessage | undefined {
 	if (entry.type === "message") {
@@ -106,16 +188,11 @@ function getHandoffMessages(branch: SessionEntry[]): AgentMessage[] {
 	return compactedBranch.map(entryToMessage).filter((message) => message !== undefined);
 }
 
-export default function (pi: ExtensionAPI) {
-	const DEBUG = true;
-	const AR_LLM_TMP = path.join(os.tmpdir(), "ar-llm");
-	const DEBUG_LOG = path.join(AR_LLM_TMP, "pi-handoff.log");
-	function log(msg: string) {
-		if (!DEBUG) return;
-		fs.mkdirSync(AR_LLM_TMP, { recursive: true });
-		fs.appendFileSync(DEBUG_LOG, `${new Date().toISOString()} ${msg}\n`);
-	}
+// ============================================================
+// Extension entry point
+// ============================================================
 
+export default function (pi: ExtensionAPI) {
 	pi.registerCommand("handoff", {
 		description: "Transfer context to a new focused session",
 		handler: async (args, ctx) => {
@@ -135,8 +212,26 @@ export default function (pi: ExtensionAPI) {
 				return;
 			}
 
-			log(`handoff invoked: goal="${goal}"`);
-			log(`model: ${JSON.stringify(ctx.model)}`);
+			// Resolve the model to use for summarization. Config is optional:
+			// if a provider/model is configured, use it (typically a cheaper model);
+			// otherwise fall back to the active session model.
+			const providerKey = CONFIG?.provider ? Object.keys(CONFIG.provider)[0] : undefined;
+			const modelKey =
+				providerKey && CONFIG?.provider ? Object.keys(CONFIG.provider[providerKey] ?? {})[0] : undefined;
+
+			let handoffModel = ctx.model;
+			if (providerKey && modelKey) {
+				const configured = ctx.modelRegistry.find(providerKey, modelKey);
+				if (!configured) {
+					ctx.ui.notify(`Configured handoff model ${providerKey}/${modelKey} not found`, "error");
+					return;
+				}
+				handoffModel = configured;
+			}
+			const compatOverride = providerKey && modelKey ? (CONFIG?.provider?.[providerKey]?.[modelKey]?.compat ?? {}) : {};
+			log(
+				`handoff model: ${handoffModel.provider}/${handoffModel.id} (${providerKey && modelKey ? "configured" : "active session model"}), compatOverride: ${JSON.stringify(compatOverride)}`,
+			);
 
 			// Gather conversation context from current branch. If the branch was compacted,
 			// include the compaction summary plus entries from firstKeptEntryId onward.
@@ -156,17 +251,15 @@ export default function (pi: ExtensionAPI) {
 
 			// Generate the handoff prompt with loader UI.
 			// Returns null on user abort, a string on success, or an Error on failure.
+			const loaderMsg = handoffModel.id !== ctx.model.id
+				? `Generating handoff prompt (via ${handoffModel.name})...`
+				: `Generating handoff prompt...`;
+
 			const result = await ctx.ui.custom<string | null | Error>((tui, theme, _kb, done) => {
-				const loader = new BorderedLoader(tui, theme, `Generating handoff prompt...`);
+				const loader = new BorderedLoader(tui, theme, loaderMsg);
 				loader.onAbort = () => done(null);
 
 				const doGenerate = async () => {
-					const auth = await ctx.modelRegistry.getApiKeyAndHeaders(ctx.model!);
-					log(`auth ok: ${auth.ok}, hasApiKey: ${auth.ok ? !!auth.apiKey : false}`);
-					if (!auth.ok || !auth.apiKey) {
-						throw new Error(auth.ok ? `No API key for ${ctx.model!.provider}` : auth.error);
-					}
-
 					const userMessage: Message = {
 						role: "user",
 						content: [
@@ -178,30 +271,60 @@ export default function (pi: ExtensionAPI) {
 						timestamp: Date.now(),
 					};
 
-					log(`complete() call starting, model: ${JSON.stringify(ctx.model)}`);
-					const response = await complete(
-						ctx.model!,
+					// Use modelRegistry's internal runtime.complete() so that custom
+					// providers (e.g. github-copilot) are properly routed. The compat
+					// complete() only knows about builtin providers and returns
+					// stopReason=error for any custom provider.
+					//
+					// IMPORTANT: do NOT pre-resolve auth and pass apiKey/headers here.
+					// runtime.complete() resolves auth internally via prepareRequest(),
+					// which also applies the subscription-aware baseUrl (e.g. business vs
+					// individual github-copilot endpoints). Passing an explicit apiKey
+					// short-circuits that and causes 421 Misdirected Request on
+					// business/enterprise Copilot subscriptions.
+					log(`complete() call starting, model: ${handoffModel.id} provider: ${handoffModel.provider}`);
+					const runtime = (ctx.modelRegistry as any).runtime;
+					// Apply per-model compat override from config, if any.
+					const handoffModelForCall = {
+						...handoffModel,
+						compat: {
+							...(handoffModel as any).compat,
+							...compatOverride,
+						},
+					};
+					const response = await runtime.complete(
+						handoffModelForCall,
 						{ systemPrompt: SYSTEM_PROMPT, messages: [userMessage] },
 						{
-							apiKey: auth.apiKey,
-							headers: auth.headers,
-							env: auth.env,
 							signal: loader.signal,
 							cacheRetention: "none",
 							sessionId: uuidv7(),
+							// Disable thinking: handoff summarization is a simple text task
+							// and adaptive/budget thinking causes errors on providers that
+							// don't support it (e.g. github-copilot).
+							thinkingEnabled: false,
 						},
 					);
 
 					log(`complete() done: stopReason=${response.stopReason}, contentParts=${response.content.length}`);
 					log(`content types: ${response.content.map((c: any) => c.type).join(", ")}`);
 
+					if (response.stopReason === "error") {
+						const errDetail =
+							(response as any).error ??
+							(response as any).errorMessage ??
+							(response as any).message ??
+							JSON.stringify(response);
+						throw new Error(`Provider returned error: ${errDetail}`);
+					}
+
 					if (response.stopReason === "aborted") {
 						return null;
 					}
 
 					const text = response.content
-						.filter((c): c is { type: "text"; text: string } => c.type === "text")
-						.map((c) => c.text)
+						.filter((c: any): c is { type: "text"; text: string } => c.type === "text")
+						.map((c: any) => c.text)
 						.join("\n");
 					log(`extracted text length: ${text.length}`);
 					return text;

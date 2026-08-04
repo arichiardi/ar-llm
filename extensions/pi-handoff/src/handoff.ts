@@ -36,7 +36,7 @@
  *
  * The generated prompt appears as a draft in the editor for review/editing.
  *
- * Config file (optional): ~/.config/pi/agent/ar-llm/pi-handoff.json
+ * Config file (optional): ~/.config/pi/agent/ar-llm/handoff.json
  * Selects which model summarizes the handoff (typically a cheaper model than
  * the active session model) and optionally overrides the system prompt and
  * per-model compat flags.
@@ -87,7 +87,7 @@ function resolveConfigDir(): string {
 
 function loadConfig(): HandoffConfig | null {
 	const dir = resolveConfigDir();
-	const filePath = path.join(dir, "ar-llm", "pi-handoff.json");
+	const filePath = path.join(dir, "ar-llm", "handoff.json");
 
 	if (!fs.existsSync(filePath)) {
 		return null;

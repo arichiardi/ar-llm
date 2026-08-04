@@ -13,7 +13,8 @@
 		"pack:skill-request-params": "npm --workspace @ar-llm/pi-skill-request-params pack --dry-run",
 		"pack:handoff": "npm --workspace @ar-llm/pi-handoff pack --dry-run",
 		"pack:notify": "npm --workspace @ar-llm/pi-notify pack --dry-run",
-		"pack:plan-mode": "npm --workspace @ar-llm/pi-plan-mode pack --dry-run"
+		"pack:plan-mode": "npm --workspace @ar-llm/pi-plan-mode pack --dry-run",
+		"pack:dir-providers": "npm --workspace @ar-llm/pi-dir-providers pack --dry-run"
 	},
 	"devDependencies": {
 		"@earendil-works/pi-coding-agent": "0.79.10",

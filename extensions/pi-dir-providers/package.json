@@ -1,0 +1,43 @@
+{
+	"name": "@ar-llm/pi-dir-providers",
+	"version": "0.1.0",
+	"description": "Pi extension that scopes the providers visible in /model based on the working directory.",
+	"type": "module",
+	"license": "Unlicense",
+	"private": false,
+	"keywords": [
+		"pi-package",
+		"pi-extension",
+		"pi",
+		"providers",
+		"directory"
+	],
+	"files": [
+		"src",
+		"README.md",
+		"LICENSE"
+	],
+	"pi": {
+		"extensions": [
+			"./src/dir-providers.ts"
+		]
+	},
+	"scripts": {
+		"typecheck": "tsc --noEmit"
+	},
+	"peerDependencies": {
+		"@earendil-works/pi-ai": "*",
+		"@earendil-works/pi-coding-agent": "*"
+	},
+	"devDependencies": {
+		"@earendil-works/pi-coding-agent": "0.79.10",
+		"@types/node": "^25.6.0",
+		"typescript": "^6.0.3"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/arichiardi/ar-llm.git",
+		"directory": "extensions/pi-dir-providers"
+	},
+	"homepage": "https://github.com/arichiardi/ar-llm/tree/main/extensions/pi-dir-providers#readme"
+}

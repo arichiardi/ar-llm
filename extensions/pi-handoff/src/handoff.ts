@@ -222,11 +222,13 @@ export default function (pi: ExtensionAPI) {
 			let handoffModel = ctx.model;
 			if (providerKey && modelKey) {
 				const configured = ctx.modelRegistry.find(providerKey, modelKey);
-				if (!configured) {
-					ctx.ui.notify(`Configured handoff model ${providerKey}/${modelKey} not found`, "error");
-					return;
+				if (configured) {
+					handoffModel = configured;
+				} else {
+					// Model not found (removed/unregistered or name changed).
+					// Silently fall back to active session model instead of blocking.
+					log(`Configured handoff model ${providerKey}/${modelKey} not found; using active session model`);
 				}
-				handoffModel = configured;
 			}
 			const compatOverride = providerKey && modelKey ? (CONFIG?.provider?.[providerKey]?.[modelKey]?.compat ?? {}) : {};
 			log(

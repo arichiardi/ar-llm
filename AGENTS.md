@@ -78,7 +78,7 @@ Publishing follows a two-step staged workflow: an agent stages the package, a hu
 ### Publishing a new version (staged workflow)
 
 1. **Bump the version** in `extensions/pi-<name>/package.json`
-2. **Stage the package** (agent can do this):
+2. **Stage the package** (agent/LLM can do this — uploads to npm's staging area, does NOT publish):
    ```bash
    cd extensions/pi-<name>
    npm stage publish
@@ -96,13 +96,13 @@ Publishing follows a two-step staged workflow: an agent stages the package, a hu
    npm stage view <stage-id>
    npm stage download <stage-id>
    ```
-5. **Approve** — human only, requires 2FA:
+5. **Approve** — human only, requires 2FA (LLM cannot skip this):
    ```bash
    npm stage approve <stage-id>
    ```
    Or approve via the **Staged Packages** tab on [npmjs.com](https://www.npmjs.com).
 
-An agent should stop after step 3 and report the stage ID for the human to review and approve.
+An agent (LLM) can safely perform steps 1–3. Staging uploads the package to npm's staging area but does **not** publish it to the registry. Approval (step 5) always requires 2FA and must be done by a human. After staging, report the stage ID so a human can run `npm stage approve <stage-id>`.
 
 ## License
 

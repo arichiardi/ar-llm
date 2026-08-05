@@ -4,6 +4,8 @@
 
 Pi extension that replaces default compaction with a full LLM-generated summary. Supports **provider-aware configuration** so different session providers can use different compaction models, request params, and prompts.
 
+Uses `ctx.modelRegistry.runtime.complete()` (the coding-agent's internal ModelRuntime) instead of the deprecated `@earendel-works/pi-ai/compat` `complete()`, so that custom providers (e.g. github-copilot) are properly routed and auth is resolved internally.
+
 ## Install
 
 ```bash
@@ -24,6 +26,16 @@ Instead of keeping the last 20k tokens of conversation turns, this extension:
 
 The compaction model is selected based on the **active session's provider**. Each provider can configure its own compaction model, request params, and prompts.
 
+## Debug Logging
+
+Set the `PI_CUSTOM_COMPACTION_DEBUG` environment variable to `1` or `true` to enable debug logging:
+
+```bash
+export PI_CUSTOM_COMPACTION_DEBUG=1
+```
+
+Debug output is written to `$TMPDIR/ar-llm/custom-compaction.log`.
+
 ## Configuration
 
 Create the config file at `~/.config/pi/agent/ar-llm/custom-compaction.json`:
@@ -36,24 +48,31 @@ Create the config file at `~/.config/pi/agent/ar-llm/custom-compaction.json`:
     "includePreviousSummary": true
   },
   "providers": {
+    "openrouter": {
+      "model": "google/gemma-4-26b-a4b-it:free"
+    },
     "github-copilot": {
-      "model": "claude-haiku",
+      "model": "claude-sonnet-4.6"
+    },
+    "alba-local": {
+      "model": "Qwen3.6-27B",
       "request-params": {
         "providers": {
-          "openai-compatible": { "max_tokens": 4096 }
+          "alba-local": {
+            "default": {
+              "maxTokens": 32758,
+              "temperature": 0.6,
+              "chat_template_kwargs": {
+                "enable_thinking": false
+              }
+            }
+          }
         }
       }
     },
-    "openrouter": {
-      "enabled": false
-    },
     "anthropic": {
-      "model": "claude-opus",
-      "prompt": {
-        "system": "You are an expert code summarizer...",
-        "user": "Summarize the technical details of this conversation...",
-        "includePreviousSummary": true
-      }
+      "model": "claude-sonnet-4.6",
+      "enabled": false
     }
   }
 }
@@ -61,7 +80,7 @@ Create the config file at `~/.config/pi/agent/ar-llm/custom-compaction.json`:
 
 ### Config Fields
 
-**`defaultPrompt`** (optional): Shared prompt template used by all providers unless overridden. If omitted or invalid, built-in defaults are used.
+**`defaultPrompt`** (optional): Shared prompt template used by all providers unless overridden. If omitted, built-in defaults are used.
 
 **`providers`** (required): Map of session provider names to their compaction configuration.
 
@@ -70,9 +89,34 @@ Create the config file at `~/.config/pi/agent/ar-llm/custom-compaction.json`:
 | Field | Type | Description |
 |-------|------|-------------|
 | `enabled` | `boolean` | Set to `false` to silently skip compaction for this provider. |
-| `model` | `string` | Model ID to use for compaction (looked up within the session's provider). Required unless `enabled: false`. |
-| `request-params` | `object` | Per-provider/per-model request parameters. |
+| `model` | `string` | Model ID to use for compaction (looked up within the session's provider catalog). Required unless `enabled: false`. |
+| `request-params` | `object` | Per-provider/per-model request parameters. Keys under `providers` match the **session provider name** (e.g. `openrouter`), not the model ID. |
 | `prompt` | `object` | Provider-specific prompt that overrides `defaultPrompt`. |
+
+#### Request Params Structure
+
+The `request-params` field mirrors the structure used by [`@ar-llm/pi-skill-request-params`](https://github.com/arichiardi/ar-llm/tree/main/extensions/pi-skill-request-params):
+
+```json
+"request-params": {
+  "providers": {
+    "<providerName>": {
+      "default": { ... },                    // provider-wide params
+      "models": {
+        "<modelId>": {
+          "default": { ... }                 // model-specific params (merged on top)
+        }
+      }
+    }
+  }
+}
+```
+
+Resolution order (lowest → highest priority, merged via `Object.assign`):
+1. `providers.<provider>.default`
+2. `providers.<provider>.models.<modelId>.default`
+
+Params use camelCase (e.g. `maxTokens`, `temperature`) to match pi's `StreamOptions` type.
 
 ### Behavior
 

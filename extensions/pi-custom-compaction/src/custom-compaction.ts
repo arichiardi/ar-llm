@@ -35,6 +35,13 @@
  * Each session provider can specify its own compaction model, request params,
  * and prompts. If a provider has "enabled": false, compaction is skipped and Pi falls back to default compaction.
  *
+ * Uses ctx.modelRegistry.runtime.complete() (the coding-agent's internal
+ * ModelRuntime) instead of the deprecated @earendel-works/pi-ai/compat
+ * complete(), so that custom providers (e.g. github-copilot) are properly
+ * routed and auth is resolved internally via prepareRequest().
+ *
+ * Debug: set PI_CUSTOM_COMPACTION_DEBUG=1 to log to $TMPDIR/ar-llm/custom-compaction.log
+ *
  * Usage:
  *   pi --extension examples/extensions/custom-compaction.ts
  */
@@ -42,9 +49,9 @@
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import { complete } from "@earendil-works/pi-ai";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { convertToLlm, serializeConversation } from "@earendil-works/pi-coding-agent";
+import { uuidv7 } from "@earendel-works/pi-ai";
+import type { ExtensionAPI } from "@earendel-works/pi-coding-agent";
+import { convertToLlm, serializeConversation } from "@earendel-works/pi-coding-agent";
 
 // ============================================================
 // Configuration types
@@ -53,7 +60,8 @@ import { convertToLlm, serializeConversation } from "@earendil-works/pi-coding-a
 interface RequestParamsConfig {
   providers: Record<string, {
     [key: string]: unknown;
-    models?: Record<string, Record<string, unknown>>;
+    default?: Record<string, unknown>;
+    models?: Record<string, { default?: Record<string, unknown> }>;
   }>;
 }
 
@@ -152,8 +160,9 @@ function loadConfig(sessionProvider: string): {
   // The compaction model is looked up within the session's provider catalog
   const compactionModel = { provider: sessionProvider, id: providerConfig.model };
 
-  // Resolve request params
-  const requestParams = resolveRequestParamsForProvider(providerConfig);
+  // Resolve request params — keyed by provider name (not model ID) to match
+  // the config structure used by pi-skill-request-params and the README.
+  const requestParams = resolveRequestParamsForProvider(sessionProvider, providerConfig);
 
   // Resolve prompt: provider-specific prompt overrides defaultPrompt, which
   // overrides built-in defaults
@@ -167,24 +176,39 @@ function loadConfig(sessionProvider: string): {
   };
 }
 
-function resolveRequestParamsForProvider(providerConfig: ProviderConfig): Record<string, unknown> {
+/**
+ * Resolve per-provider/per-model request params from the config.
+ *
+ * Config structure (mirrors pi-skill-request-params):
+ *   request-params.providers.<providerName>
+ *     ├── default:          { ... }      — provider-wide base params
+ *     └── models.<modelId>
+ *         └── default:      { ... }      — model-specific refinement
+ *
+ * Returns {} when no request-params are configured for this provider.
+ */
+function resolveRequestParamsForProvider(
+  sessionProvider: string,
+  providerConfig: ProviderConfig,
+): Record<string, unknown> {
   const rpCfg = providerConfig["request-params"];
-  if (!rpCfg || !providerConfig.model) return {};
+  if (!rpCfg) return {};
 
-  const providerCfg = rpCfg.providers?.[providerConfig.model];
+  const providerCfg = rpCfg.providers?.[sessionProvider];
   if (!providerCfg) return {};
 
-  // Extract non-"models" keys as provider-level params
-  const { models, ...providerParams } = providerCfg;
-  const modelParams = providerCfg.models?.[providerConfig.model] ?? {};
-  return Object.assign({}, providerParams, modelParams);
+  // Extract provider-level default params (non-models, non-default keys)
+  const { models, default: modelDefault, ...flatParams } = providerCfg;
+  // Extract model-specific default params
+  const modelParams = models?.[providerConfig.model ?? ""]?.default ?? {};
+  return Object.assign({}, flatParams, modelDefault, modelParams);
 }
 
 // ============================================================
 // Debug logging
 // ============================================================
 
-const DEBUG = false;
+const DEBUG = process.env.PI_CUSTOM_COMPACTION_DEBUG === "1" || process.env.PI_CUSTOM_COMPACTION_DEBUG === "true";
 const AR_LLM_TMP = path.join(os.tmpdir(), "ar-llm");
 const DEBUG_LOG = path.join(AR_LLM_TMP, "custom-compaction.log");
 
@@ -193,6 +217,10 @@ function log(msg: string) {
   fs.mkdirSync(AR_LLM_TMP, { recursive: true });
   fs.appendFileSync(DEBUG_LOG, `${new Date().toISOString()} ${msg}\n`);
 }
+
+// ============================================================
+// Extension entry point
+// ============================================================
 
 export default function (pi: ExtensionAPI) {
 	pi.on("session_before_compact", async (event, ctx) => {
@@ -224,21 +252,7 @@ export default function (pi: ExtensionAPI) {
 			ctx.ui.notify(`Could not find compaction model ${resolvedConfig.compactionProvider}/${resolvedConfig.compactionModelId}, using default compaction`, "warning");
 			return;
 		}
-    log(`Found model: ${model.provider}/${model.id}`);
-
-		// Resolve request auth for the summarization model
-		const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
-		if (!auth.ok) {
-			log(`Auth failed: ${auth.error}`);
-			ctx.ui.notify(`Compaction auth failed: ${auth.error}`, "warning");
-			return;
-		}
-		if (!auth.apiKey) {
-			log(`No API key for ${model.provider}`);
-			ctx.ui.notify(`No API key for ${model.provider}, using default compaction`, "warning");
-			return;
-		}
-    log(`Auth OK, apiKey present: ${!!auth.apiKey}, headers: ${JSON.stringify(Object.keys(auth.headers || {}))}`);
+    log(`Found model: ${model.provider}/${model.id}, api: ${model.api}, baseUrl: ${model.baseUrl}`);
 
 		// Combine all messages for full summary
 		const allMessages = [...messagesToSummarize, ...turnPrefixMessages];
@@ -260,14 +274,14 @@ export default function (pi: ExtensionAPI) {
 			.replace("{previous_summary}", previousContext)
 			.replace("{conversation}", conversationText);
 
-		// Build messages that ask for a comprehensive summary
+		// Build messages for the LLM call
 		const summaryMessages = [
 			{
 				role: "user" as const,
 				content: [
 					{
 						type: "text" as const,
-						text: `${resolvedConfig.prompt.system}\n\n${userPrompt}`,
+						text: userPrompt,
 					},
 				],
 				timestamp: Date.now(),
@@ -275,46 +289,60 @@ export default function (pi: ExtensionAPI) {
 		];
 
 		try {
-			// Pass signal to honor abort requests (e.g., user cancels compaction)
-			const effectiveParams = {
-				...resolvedConfig.requestParams,
-				apiKey: auth.apiKey,
-				headers: auth.headers,
-				maxTokens: 8192,
-				signal,
-			};
+			// Use ctx.modelRegistry.runtime (the coding-agent's internal ModelRuntime)
+			// instead of the compat complete(), which only knows about builtin providers
+			// and returns stopReason=error for any custom provider.
+			//
+			// IMPORTANT: do NOT pre-resolve auth and pass apiKey/headers here.
+			// runtime.complete() resolves auth internally via prepareRequest(),
+			// which also applies the subscription-aware baseUrl (e.g. business vs
+			// individual github-copilot endpoints). Passing an explicit apiKey
+			// short-circuits that and can cause 421 Misdirected Request on
+			// business/enterprise subscriptions.
+			const runtime = (ctx.modelRegistry as any).runtime;
+			log(`Calling runtime.complete() with model: ${model.provider}/${model.id}`);
 
-			const response = await complete(
+			const response = await runtime.complete(
 				model,
-				{ messages: summaryMessages },
-				effectiveParams,
+				{
+					systemPrompt: resolvedConfig.prompt.system,
+					messages: summaryMessages,
+				},
+				{
+					...resolvedConfig.requestParams,
+					maxTokens: 8192,
+					signal,
+					cacheRetention: "none",
+					sessionId: uuidv7(),
+					// Disable thinking: compaction summarization is a simple text task
+					// and adaptive/budget thinking causes errors on providers that
+					// don't support it (e.g. github-copilot).
+					thinkingEnabled: false,
+				},
 			);
+
+			log(`runtime.complete() done: stopReason=${response.stopReason}, contentParts=${response.content?.length ?? 'N/A'}`);
+			log(`content types: ${response.content?.map((c: any) => c.type).join(", ") ?? 'N/A'}`);
+
 			// Check for API-level errors (model not found, auth issues, etc.)
-			if ((response as any).stopReason === "error" || (response as any).errorMessage) {
-				const errMsg = (response as any).errorMessage ?? "Unknown error";
+			if (response.stopReason === "error") {
+				const errMsg = response.errorMessage ?? response.error ?? "Unknown error";
 				log(`Model returned error: ${errMsg}`);
 				ctx.ui.notify(`Compaction model error: ${errMsg}, using default compaction`, "warning");
 				return;
 			}
 
-			// Debug: inspect raw response structure
-			log(`Response keys: ${JSON.stringify(Object.keys(response))}`);
-			log(`Full response JSON: ${JSON.stringify(response, null, 2).substring(0, 5000)}`);
-			if (response.content) {
-				log(`Content array length: ${response.content.length}`);
-				response.content.forEach((c: any, i: number) => {
-					log(`  content[${i}]: type=${c.type}, keys=${JSON.stringify(Object.keys(c))}, textLen=${c.text?.length ?? 'N/A'}`);
-				});
-			} else {
-				log(`response.content is ${response.content}`);
+			if (response.stopReason === "aborted") {
+				log("Compaction was aborted");
+				return;
 			}
 
 			const summary = response.content
-				.filter((c): c is { type: "text"; text: string } => c.type === "text")
-				.map((c) => c.text)
+				.filter((c: any): c is { type: "text"; text: string } => c.type === "text")
+				.map((c: any) => c.text)
 				.join("\n");
 
-			log(`Summary length: ${summary.length}, trimmed length: ${summary.trim().length}`);
+			log(`Summary length: ${summary.length}, trimmed: ${summary.trim().length}`);
 			log(`Summary preview: ${summary.substring(0, 500)}`);
 
 			if (!summary.trim()) {
@@ -331,10 +359,12 @@ export default function (pi: ExtensionAPI) {
 					summary,
 					firstKeptEntryId,
 					tokensBefore,
+					usage: response.usage,
 				},
 			};
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
+			log(`Compaction error: ${message}`);
 			ctx.ui.notify(`Compaction failed: ${message}`, "error");
 			// Fall back to default compaction on error
 			return;

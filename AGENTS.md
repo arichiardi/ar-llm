@@ -37,6 +37,14 @@ npm run pack:skill-request-params
 npm run pack:handoff
 npm run pack:notify
 npm run pack:plan-mode
+npm run pack:dir-providers
+
+A top-level `Makefile` provides convenience targets for bulk operations:
+```bash
+make typecheck      # typecheck all extensions
+make pack           # dry-run pack all extensions
+make help           # list all available targets
+```
 ```
 
 ## TypeScript conventions
@@ -54,7 +62,8 @@ npm run pack:plan-mode
 3. Add `extensions/pi-<name>/tsconfig.json` extending `../../tsconfig.json`
 4. Add `extensions/pi-<name>/LICENSE` (copy from an existing package)
 5. Add `"pack:<name>"` script to root `package.json`
-6. Run `npm install --ignore-scripts` to register the new workspace
+6. Add `<name>` to the `EXTENSIONS` list in the top-level `Makefile`
+7. Run `npm install --ignore-scripts` to register the new workspace
 
 ## Publishing
 
@@ -73,6 +82,10 @@ Publishing follows a two-step staged workflow: an agent stages the package, a hu
    ```bash
    cd extensions/pi-<name>
    npm stage publish
+   ```
+   Or use the Makefile shortcut which combines steps 2–3 and prints the stage ID:
+   ```bash
+   make publish-<name>
    ```
 3. **List staged packages** to get the stage ID:
    ```bash

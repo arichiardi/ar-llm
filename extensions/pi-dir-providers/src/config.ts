@@ -9,7 +9,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { normalizeDir, parseModelRef, type ProviderOverride, type Rule } from "./match.js";
+import { dirMatches, normalizeDir, parseModelRef, type ProviderOverride, type Rule } from "./match.js";
 
 export interface DirProvidersConfig {
 	rules: Rule[];
@@ -169,6 +169,31 @@ export function loadConfig(): DirProvidersConfig | null {
 		}
 
 		rules.push({ dirs, allowedProviders, defaultModel, providers });
+	}
+
+	// Warn about parent-after-child ordering: a broader dir declared in a later
+	// rule silently overrides a narrower dir in an earlier rule (the exact bug
+	// that is easy to introduce when rules are mis-ordered). Only warn when both
+	// rules have a replace-on-match field (allowedProviders/defaultModel), since
+	// providers is merged and not shadowed.
+	for (let i = 0; i < rules.length; i++) {
+		const early = rules[i];
+		if (!early.allowedProviders && !early.defaultModel) continue;
+		for (let j = i + 1; j < rules.length; j++) {
+			const late = rules[j];
+			if (!late.allowedProviders && !late.defaultModel) continue;
+			for (const earlyDir of early.dirs) {
+				for (const lateDir of late.dirs) {
+					if (lateDir !== earlyDir && dirMatches(earlyDir, lateDir)) {
+						console.warn(
+							`${PREFIX} Rule ${j}'s dir "${lateDir}" is a parent of rule ${i}'s dir "${earlyDir}" ` +
+								`but comes later; its allowedProviders/defaultModel will override rule ${i}. ` +
+								`Reorder so broad rules precede narrow ones.`,
+						);
+					}
+				}
+			}
+		}
 	}
 
 	return { rules };

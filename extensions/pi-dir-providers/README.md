@@ -44,11 +44,23 @@ Create `<agentDir>/ar-llm/dir-providers.json` (same convention as
 }
 ```
 
-### Rule semantics
+### Rule ordering (important!)
 
-- Rules are applied **in array order, from less generic to more specific**.
-  Every rule whose `dirs` match the current working directory applies; later
-  rules override earlier ones.
+Rules are applied **strictly in array order** — not by specificity. Every rule
+whose `dirs` match the current working directory applies; for `allowedProviders`
+and `defaultModel`, **the last matching rule wins** (its value replaces any
+earlier rule's value). The `providers` field is different: overrides from all
+matching rules are **merged** together per provider id.
+
+> **You must order rules from least specific to most specific.** Put the broadest
+> directory rules first and the narrowest (most specific) directory rules last.
+> If you reverse this order, a generic rule will silently override a specific
+> one. For example, with rules `[{dirs: ["~/git/managing-construction"], allowedProviders: ["github-copilot"]}, {dirs: ["~/git"], allowedProviders: ["openrouter"]}]`, running in
+> `~/git/managing-construction/gossamer` matches **both** rules, and the second
+> rule's `openrouter` wins — `github-copilot` gets hidden. The correct order is
+> to swap them so `~/git` comes first and `~/git/managing-construction` comes
+> second.
+
 - `dirs`: list of directory subtrees. A leading `~` is expanded; a directory
   matches when the cwd equals it or is inside it (subdirectories inherit their
   ancestor's rules; a more-specific rule then overrides on top). Directory
@@ -91,10 +103,10 @@ provider's model set (like `models.json`), whereas an override object without
   the rule's `allowedProviders`) produce warnings and skip the offending part.
 - Unknown provider ids in `allowedProviders` warn at startup; check actual ids
   with `pi --list-models`.
-
-A directory may appear in more than one rule; all matching rules apply in
-order and the later one takes precedence. config warns once about such overlap
-so accidental shadowing is visible.
+- If a later rule's directory is a **parent** of an earlier rule's directory (i.e.
+  the broad rule appears after the narrow one), a warning is emitted at startup:
+  the parent rule's `allowedProviders`/`defaultModel` will silently override the
+  child rule's, and reordering is needed to fix it.
 
 ## Commands
 
@@ -103,6 +115,18 @@ so accidental shadowing is visible.
   overrides. A startup log line on stderr (`[dir-providers] Active in <cwd>:`)
   is also emitted whenever the extension is active — the quickest way to
   confirm it loaded.
+
+## Development
+
+```bash
+make typecheck   # type-check source + tests
+make test        # run unit tests (25 checks across match.ts and config.ts)
+```
+
+Tests use Node.js's built-in `node:test` runtime — no external test runner
+is required (Node ≥ 22.6). The `test/` directory contains a small ESM loader
+(`loader.mjs` + `register.mjs`) that maps NodeNext-style `.js` imports
+to their `.ts` source files so they can be imported without a build step.
 
 ## Limitations
 

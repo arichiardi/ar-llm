@@ -1,6 +1,6 @@
 {
 	"name": "@ar-llm/pi-dir-providers",
-	"version": "0.1.2",
+	"version": "0.1.3",
 	"description": "Pi extension that scopes the providers visible in /model based on the working directory.",
 	"type": "module",
 	"license": "Unlicense",

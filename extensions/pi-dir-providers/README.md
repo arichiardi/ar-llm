@@ -65,8 +65,9 @@ matching rules are **merged** together per provider id.
   matches when the cwd equals it or is inside it (subdirectories inherit their
   ancestor's rules; a more-specific rule then overrides on top). Directory
   paths are symlink-resolved, so `/tmp` on macOS (which resolves to
-  `/private/tmp`) matches the physical cwd. Nonexistent directories warn at
-  startup and match as-is; point the rule at the real resolved path.
+  `/private/tmp`) matches the physical cwd. Nonexistent or inaccessible
+  directories warn at startup and match as-is; point the rule at the real
+  resolved path.
 - `allowedProviders`: **replaces** the effective set of visible providers.
   Providers outside the set are hidden from `/model` (their models are removed
   for the session; auth/`/login` state is untouched).
@@ -116,11 +117,16 @@ provider's model set (like `models.json`), whereas an override object without
   is also emitted whenever the extension is active — the quickest way to
   confirm it loaded.
 
+  Config-loading warnings (nonexistent/inaccessible dirs, unknown providers,
+  rule shadowing) are also surfaced as a TUI notification at `session_start`,
+  since the stderr output alone may not be visible once the TUI is running.
+
 ## Development
 
 ```bash
 make typecheck   # type-check source + tests
-make test        # run unit tests (25 checks across match.ts and config.ts)
+make test        # run unit tests (26 checks across match.ts and config.ts)
+make test-watch  # same as `make test` but re-runs on file changes
 ```
 
 Tests use Node.js's built-in `node:test` runtime — no external test runner

@@ -97,8 +97,10 @@ export function loadConfig(): DirProvidersConfig | null {
 			let resolved = normalized;
 			try {
 				resolved = fs.realpathSync(normalized);
-			} catch {
-				console.warn(`${PREFIX} Rule ${index}: dir "${normalized}" does not exist.`);
+			} catch (err) {
+				console.warn(
+					`${PREFIX} Rule ${index}: dir "${normalized}" could not be resolved (${err instanceof Error ? err.message : String(err)}); matching as-is.`,
+				);
 			}
 			if (dirs.includes(resolved)) {
 				console.warn(`${PREFIX} Rule ${index}: duplicate dir "${resolved}" within rule; ignoring duplicate.`);

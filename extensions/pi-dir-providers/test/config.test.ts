@@ -120,6 +120,32 @@ describe("loadConfig — shadowing warning", () => {
 	});
 });
 
+describe("loadConfig — nonexistent dir warning", () => {
+	let captured: ReturnType<typeof captureWarnings>;
+	let tmpDir: string;
+
+	afterEach(() => {
+		captured.restore();
+		delete process.env.PI_CODING_AGENT_DIR;
+		fs.rmSync(tmpDir, { recursive: true, force: true });
+	});
+
+	it("warns with 'could not be resolved' (not 'does not exist') for inaccessible dirs", () => {
+		captured = captureWarnings();
+		tmpDir = writeTmpConfig({
+			rules: [
+				{ dirs: ["~/git/does-not-exist-xyz"], allowedProviders: ["openrouter"] },
+			],
+		});
+
+		const config = loadConfig();
+		assert.ok(config, "config should still load");
+		const warn = captured.warnings.find((w) => w.includes("could not be resolved"));
+		assert.ok(warn, `expected 'could not be resolved' warning, got: ${captured.warnings.join("\n")}`);
+		assert.ok(!captured.warnings.some((w) => w.includes("does not exist")), "should not contain old 'does not exist' message");
+	});
+});
+
 describe("loadConfig — null config disables extension", () => {
 	let tmpDir: string;
 

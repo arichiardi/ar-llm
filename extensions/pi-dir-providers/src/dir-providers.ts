@@ -64,9 +64,21 @@ function hasCliModelOverride(): boolean {
 // ============================================================
 
 let CONFIG: DirProvidersConfig | null = null;
+const CONFIG_WARNINGS: string[] = [];
+const origWarn = console.warn;
 try {
+	// Capture warnings emitted during config loading so they can be surfaced
+	// in the TUI (they would otherwise only appear on stderr before the TUI
+	// starts, where they are invisible).  We still forward to stderr for
+	// headless / non-TUI runs.
+	console.warn = (msg?: unknown, ...rest: unknown[]) => {
+		CONFIG_WARNINGS.push(String(msg));
+		origWarn(msg, ...rest);
+	};
 	CONFIG = loadConfig();
+	console.warn = origWarn;
 } catch (err) {
+	console.warn = origWarn;
 	console.error(err instanceof Error ? err.message : String(err));
 	console.error(`${PREFIX} Extension disabled due to config error.`);
 }
@@ -128,6 +140,13 @@ export default function (pi: ExtensionAPI) {
 
 	pi.on("session_start", async (_event, ctx) => {
 		if (!active) return;
+
+		// Surface config-loading warnings in the TUI.  They were also printed
+		// to stderr at startup, but before the TUI begins — where they are
+		// invisible.
+		if (CONFIG_WARNINGS.length > 0) {
+			ctx.ui.notify(`${PREFIX} Config warnings:\n${CONFIG_WARNINGS.join("\n")}`, "warning");
+		}
 
 		ctx.ui.setStatus(
 			"dir-providers",

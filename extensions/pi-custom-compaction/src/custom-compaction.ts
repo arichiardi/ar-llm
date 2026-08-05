@@ -36,7 +36,7 @@
  * and prompts. If a provider has "enabled": false, compaction is skipped and Pi falls back to default compaction.
  *
  * Uses ctx.modelRegistry.runtime.complete() (the coding-agent's internal
- * ModelRuntime) instead of the deprecated @earendel-works/pi-ai/compat
+ * ModelRuntime) instead of the deprecated @earendil-works/pi-ai/compat
  * complete(), so that custom providers (e.g. github-copilot) are properly
  * routed and auth is resolved internally via prepareRequest().
  *
@@ -49,9 +49,9 @@
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import { uuidv7 } from "@earendel-works/pi-ai";
-import type { ExtensionAPI } from "@earendel-works/pi-coding-agent";
-import { convertToLlm, serializeConversation } from "@earendel-works/pi-coding-agent";
+import { uuidv7 } from "@earendil-works/pi-ai";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { convertToLlm, serializeConversation } from "@earendil-works/pi-coding-agent";
 
 // ============================================================
 // Configuration types

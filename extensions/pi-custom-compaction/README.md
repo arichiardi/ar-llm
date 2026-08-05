@@ -4,7 +4,7 @@
 
 Pi extension that replaces default compaction with a full LLM-generated summary. Supports **provider-aware configuration** so different session providers can use different compaction models, request params, and prompts.
 
-Uses `ctx.modelRegistry.runtime.complete()` (the coding-agent's internal ModelRuntime) instead of the deprecated `@earendel-works/pi-ai/compat` `complete()`, so that custom providers (e.g. github-copilot) are properly routed and auth is resolved internally.
+Uses `ctx.modelRegistry.runtime.complete()` (the coding-agent's internal ModelRuntime) instead of the deprecated `@earendil-works/pi-ai/compat` `complete()`, so that custom providers (e.g. github-copilot) are properly routed and auth is resolved internally.
 
 ## Install
 

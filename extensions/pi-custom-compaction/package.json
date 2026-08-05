@@ -1,6 +1,6 @@
 {
 	"name": "@ar-llm/pi-custom-compaction",
-	"version": "0.4.0",
+	"version": "0.4.1",
 	"description": "Pi extension that replaces default compaction with a full LLM-generated summary. Supports provider-aware configuration so different session providers can use different compaction models, request params, and prompts.",
 	"type": "module",
 	"license": "Unlicense",

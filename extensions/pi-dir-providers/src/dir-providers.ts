@@ -17,6 +17,7 @@
  */
 
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
 import { getBuiltinProviders } from "@earendil-works/pi-ai/providers/all";
 import { getAgentDir, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
@@ -24,6 +25,20 @@ import { type DirProvidersConfig, loadConfig } from "./config.js";
 import { parseModelRef, resolveProfile } from "./match.js";
 
 const PREFIX = "[dir-providers]";
+
+// Verbose startup diagnostics. Off by default to keep startup quiet; the
+// equivalent info is surfaced in the TUI instead. Set PI_DIR_PROVIDERS_DEBUG=1
+// to write diagnostics to $TMPDIR/ar-llm/dir-providers.log (never stderr,
+// matching the pi-custom-compaction extension).
+const DEBUG = process.env.PI_DIR_PROVIDERS_DEBUG === "1" || process.env.PI_DIR_PROVIDERS_DEBUG === "true";
+const AR_LLM_TMP = path.join(os.tmpdir(), "ar-llm");
+const DEBUG_LOG = path.join(AR_LLM_TMP, "dir-providers.log");
+
+function log(msg: string) {
+	if (!DEBUG) return;
+	fs.mkdirSync(AR_LLM_TMP, { recursive: true });
+	fs.appendFileSync(DEBUG_LOG, `${new Date().toISOString()} ${msg}\n`);
+}
 
 // ============================================================
 // Provider enumeration
@@ -69,11 +84,11 @@ const origWarn = console.warn;
 try {
 	// Capture warnings emitted during config loading so they can be surfaced
 	// in the TUI (they would otherwise only appear on stderr before the TUI
-	// starts, where they are invisible).  We still forward to stderr for
-	// headless / non-TUI runs.
-	console.warn = (msg?: unknown, ...rest: unknown[]) => {
+	// starts, where they are invisible).  In debug mode, mirror them to the
+	// debug log file (`PI_DIR_PROVIDERS_DEBUG=1`); nothing goes to stderr.
+	console.warn = (msg?: unknown) => {
 		CONFIG_WARNINGS.push(String(msg));
-		origWarn(msg, ...rest);
+		if (DEBUG) log(String(msg));
 	};
 	CONFIG = loadConfig();
 	console.warn = origWarn;
@@ -98,7 +113,9 @@ export default function (pi: ExtensionAPI) {
 
 		for (const id of profile.allowedProviders ?? []) {
 			if (!known.has(id)) {
-				console.warn(`${PREFIX} Unknown provider "${id}" in allowedProviders; check for typos.`);
+				const msg = `${PREFIX} Unknown provider "${id}" in allowedProviders; check for typos.`;
+				CONFIG_WARNINGS.push(msg);
+				if (DEBUG) log(msg);
 			}
 		}
 
@@ -114,7 +131,9 @@ export default function (pi: ExtensionAPI) {
 					pi.registerProvider(id, { models: [] });
 					hiddenCount++;
 				} catch (err) {
-					console.warn(`${PREFIX} Failed to hide provider "${id}": ${err instanceof Error ? err.message : String(err)}`);
+					const msg = `${PREFIX} Failed to hide provider "${id}": ${err instanceof Error ? err.message : String(err)}`;
+					CONFIG_WARNINGS.push(msg);
+					if (DEBUG) log(msg);
 				}
 			}
 		}
@@ -124,29 +143,33 @@ export default function (pi: ExtensionAPI) {
 			try {
 				pi.registerProvider(id, override);
 			} catch (err) {
-				console.warn(
-					`${PREFIX} Failed to apply override for provider "${id}": ${err instanceof Error ? err.message : String(err)}`,
-				);
+				const msg = `${PREFIX} Failed to apply override for provider "${id}": ${err instanceof Error ? err.message : String(err)}`;
+				CONFIG_WARNINGS.push(msg);
+				if (DEBUG) log(msg);
 			}
 		}
 
-		console.error(
-			`${PREFIX} Active in ${process.cwd()}: rules ${profile.matchedRules.join(", ")}, ` +
-				`allowed [${(profile.allowedProviders ?? []).join(", ") || "unrestricted"}]` +
-				(profile.allowedProviders ? `, hid ${hiddenCount} providers` : "") +
-				(profile.defaultModel ? `, default ${profile.defaultModel}` : ""),
-		);
+		if (DEBUG) {
+			log(
+				`${PREFIX} Active in ${process.cwd()}: rules ${profile.matchedRules.join(", ")}, ` +
+					`allowed [${(profile.allowedProviders ?? []).join(", ") || "unrestricted"}]` +
+					(profile.allowedProviders ? `, hid ${hiddenCount} providers` : "") +
+					(profile.defaultModel ? `, default ${profile.defaultModel}` : ""),
+			);
+		}
 	}
 
 	pi.on("session_start", async (_event, ctx) => {
-		if (!active) return;
-
-		// Surface config-loading warnings in the TUI.  They were also printed
-		// to stderr at startup, but before the TUI begins — where they are
-		// invisible.
+		// Surface config-loading warnings in the TUI. They are captured (not
+		// printed to stderr) at startup, where they would be invisible once the
+		// TUI takes over; `PI_DIR_PROVIDERS_DEBUG=1` also writes them to the debug
+		// log file. Surface them regardless of whether the current
+		// directory matches a rule, so config typos are never silently dropped.
 		if (CONFIG_WARNINGS.length > 0) {
 			ctx.ui.notify(`${PREFIX} Config warnings:\n${CONFIG_WARNINGS.join("\n")}`, "warning");
 		}
+
+		if (!active) return;
 
 		ctx.ui.setStatus(
 			"dir-providers",

@@ -113,13 +113,33 @@ provider's model set (like `models.json`), whereas an override object without
 
 - `/dir-providers` — print the effective profile for the current directory:
   matched rule indices, allowed providers, default model, and merged provider
-  overrides. A startup log line on stderr (`[dir-providers] Active in <cwd>:`)
-  is also emitted whenever the extension is active — the quickest way to
-  confirm it loaded.
+  overrides. The TUI status bar also shows the active provider set
+  (`dir-providers: providers: ...`) whenever the extension is active.
 
   Config-loading warnings (nonexistent/inaccessible dirs, unknown providers,
-  rule shadowing) are also surfaced as a TUI notification at `session_start`,
-  since the stderr output alone may not be visible once the TUI is running.
+  rule shadowing) are **not** printed to stderr by default — they would only
+  appear before the TUI starts, where they're invisible. Instead they are
+  captured and surfaced as a `Warning:` notification in the TUI at
+  `session_start`, so they are always visible when running interactively.
+
+  For headless or non-TUI runs (or to debug startup behavior), set
+  `PI_DIR_PROVIDERS_DEBUG=1`: diagnostics are written to
+  `$TMPDIR/ar-llm/dir-providers.log` (never stderr).
+
+## Debug
+
+The extension is quiet on stderr by default — diagnostics are routed to the
+TUI instead. To inspect raw startup behavior (e.g. for headless runs or to
+confirm which rules/providers resolved), enable verbose logging:
+
+```bash
+PI_DIR_PROVIDERS_DEBUG=1 pi ...
+```
+
+Diagnostics are written to `$TMPDIR/ar-llm/dir-providers.log`, including:
+- The `[dir-providers] Active in <cwd>: rules ..., allowed [...], hid N providers`
+  status line.
+- All captured config warnings (EPERM, unknown providers, rule shadowing).
 
 ## Development
 

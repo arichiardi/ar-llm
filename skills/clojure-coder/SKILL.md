@@ -34,22 +34,46 @@ clj-nrepl-eval -p <port> "<clojure-code>"
 clj-nrepl-eval -p <port> --timeout 2000 "<clojure-code>"
 ```
 
-Guidelines:
-- REPL session persists between evaluations
-- Always use `:reload` when requiring namespaces
-- Run a simple test command at session start to verify connection
-- STOP and ask the user if `clj-nrepl-eval` fails
-- Evaluate small pieces to verify correctness
+Reset the session (clears all state):
+```shell
+clj-nrepl-eval -p <PORT> --reset-session
+clj-nrepl-eval -p <PORT> --reset-session "(def x 1)"
+```
+
+### Important Notes
+
+- **Run a test command** at session start to verify connection
+  - STOP and ask the user if `clj-nrepl-eval` fails
+- **Prefer heredoc via stdin:** Use `clj-nrepl-eval -p <PORT> <<'EOF' ... EOF` to avoid shell escaping issues
+- **Sessions persist:** State (vars, namespaces, loaded libraries) persists across invocations until the nREPL server restarts. `--reset-session` only resets the nREPL session (clearing dynamic vars like `*e`, `*1`), not `def`'d vars or loaded namespaces
+- **Always use :reload:** When requiring namespaces, use `:reload` to pick up recent changes
+- **Default timeout:** 2 minutes (120000ms) - increase for long-running operations
+- **Input precedence:** Command-line arguments take precedence over stdin
+- **Evaluate small pieces** to verify correctness
   > "Tiny steps with high quality rich feedback is the recipe for the sauce."
-- Build incrementally through REPL interaction
-- Always verify code after file changes
-- NEVER run blocking server commands
+- **Never run blocking commands**
+  
+### Typical Workflow
+
+1. Discover nREPL servers: `clj-nrepl-eval --discover-ports`
+2. Use **AskUserQuestion** tool to prompt user to select a port
+3. Require namespace:
+   ```bash
+   clj-nrepl-eval -p <PORT> "(require '[my.ns :as ns] :reload)"
+   ```
+4. Test function:
+   ```bash
+   clj-nrepl-eval -p <PORT> "(ns/my-fn ...)"
+   ```
+5. Iterate: Make changes, re-require with `:reload`, test again
 
 ## ⚠️ Parenthesis Balancing
 
 MUST be extremely careful with parenthesis balancing as it can cause confusing syntax errors.
 
-Run `clj-paren-repair <files>` for unbalanced delimiters. 🚨 CRITICAL: Do NOT manually repair.
+🚨 CRITICAL: Do NOT manually repair 🚨
+
+Run `clj-paren-repair <files>` for unbalanced delimiters, the tool automatically repairs missing or mismatched parentheses.
 
 For complex or lengthy functions:
 - Break work into smaller, focused functions

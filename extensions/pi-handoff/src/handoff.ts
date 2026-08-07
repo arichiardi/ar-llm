@@ -101,7 +101,8 @@ let CONFIG: HandoffConfig | null = null;
 try {
 	CONFIG = loadConfig();
 } catch (err: any) {
-	console.error(`[pi-handoff] Failed to load config: ${err.message}`);
+	// Log to file only, not console (console output appears in terminal even during TUI)
+	log(`Failed to load config: ${err.message}`);
 }
 
 // ============================================================
@@ -363,26 +364,68 @@ export default function (pi: ExtensionAPI) {
 			}
 
 			// Let user edit the generated prompt
-			const editedPrompt = await ctx.ui.editor("Edit handoff prompt", result);
+			log(`opening editor with ${result.length} chars`);
+			let editedPrompt: string;
+			try {
+				editedPrompt = await ctx.ui.editor("Edit handoff prompt", result);
+				log(`editor returned ${editedPrompt.length} chars`);
+			} catch (err: any) {
+				log(`editor error: ${err.message}`);
+				log(`editor stack: ${err.stack}`);
+				ctx.ui.notify(`Handoff editor failed: ${err.message}`, "error");
+				return;
+			}
 
 			if (editedPrompt === undefined) {
+				log(`editor cancelled`);
 				ctx.ui.notify("Cancelled", "info");
 				return;
 			}
 
-			// Create new session with parent tracking. Use the replacement-session
-			// context for post-switch UI work; the original ctx is stale after a
-			// successful session replacement.
-			const newSessionResult = await ctx.newSession({
-				parentSession: currentSessionFile,
-				withSession: async (replacementCtx) => {
-					replacementCtx.ui.setEditorText(editedPrompt);
-					replacementCtx.ui.notify("Handoff ready. Submit when ready.", "info");
-				},
-			});
+			log(`creating new session`);
 
-			if (newSessionResult.cancelled) {
-				ctx.ui.notify("New session cancelled", "info");
+			// Suppress console.warn/console.error during newSession(). pi's core code
+			// emits "Warning:" messages to stderr during session creation (resource
+			// loading, model resolution) which appear in the TUI as transient noise.
+			const origWarn = console.warn;
+			const origError = console.error;
+			console.warn = (...args: unknown[]) => log(`suppressed warn: ${args.join(" ")}`);
+			console.error = (...args: unknown[]) => log(`suppressed error: ${args.join(" ")}`);
+
+			try {
+				// Create new session with parent tracking. Use the replacement-session
+				// context for post-switch UI work; the original ctx is stale after a
+				// successful session replacement.
+				const newSessionResult = await ctx.newSession({
+					parentSession: currentSessionFile,
+					withSession: async (replacementCtx) => {
+						log(`withSession callback starting`);
+						try {
+							replacementCtx.ui.setEditorText(editedPrompt);
+							replacementCtx.ui.notify("Handoff ready. Submit when ready.", "info");
+							log(`withSession callback complete`);
+						} catch (err: any) {
+							log(`withSession error: ${err.message}`);
+							log(`withSession stack: ${err.stack}`);
+							throw err;
+						}
+					},
+				});
+
+				if (newSessionResult.cancelled) {
+					log(`new session cancelled`);
+					ctx.ui.notify("New session cancelled", "info");
+				} else {
+					log(`new session created successfully`);
+				}
+			} catch (err: any) {
+				log(`newSession error: ${err.message}`);
+				log(`newSession stack: ${err.stack}`);
+				ctx.ui.notify(`Handoff session creation failed: ${err.message}`, "error");
+				return;
+			} finally {
+				console.warn = origWarn;
+				console.error = origError;
 			}
 		},
 	});

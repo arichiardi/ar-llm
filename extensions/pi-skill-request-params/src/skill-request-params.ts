@@ -56,7 +56,6 @@ import * as path from "path";
  *
  * Config file: `skill-request-params.json`
  * Default locations (checked in order):
- *   - $SKILL_REQUEST_PARAMS_DIR/skill-request-params.json
  *   - $PI_CODING_AGENT_DIR/skill-request-params.json
  *   - ~/.pi/agent/skill-request-params.json
  *
@@ -153,13 +152,11 @@ interface SkillRequestConfig {
 
 /**
  * Resolve the directory containing the config file:
- *   1. SKILL_REQUEST_PARAMS_DIR env var
- *   2. PI_CODING_AGENT_DIR env var
- *   3. ~/.pi/agent
+ *   1. PI_CODING_AGENT_DIR env var
+ *   2. ~/.pi/agent
  */
 function resolveConfigDir(): string {
-  return process.env.SKILL_REQUEST_PARAMS_DIR
-    || process.env.PI_CODING_AGENT_DIR
+  return process.env.PI_CODING_AGENT_DIR
     || path.join(os.homedir(), ".pi", "agent");
 }
 
@@ -174,7 +171,7 @@ function loadConfig(): SkillRequestConfig {
   if (!fs.existsSync(filePath)) {
     throw new Error(
       `[skill-request-params] Config file not found at ${filePath}\n` +
-      `Set SKILL_REQUEST_PARAMS_DIR or PI_CODING_AGENT_DIR to point to the directory containing skill-request-params.json.`
+      `Set PI_CODING_AGENT_DIR to point to the directory containing skill-request-params.json.`
     );
   }
 

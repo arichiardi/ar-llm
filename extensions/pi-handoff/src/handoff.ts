@@ -401,8 +401,12 @@ export default function (pi: ExtensionAPI) {
 					withSession: async (replacementCtx) => {
 						log(`withSession callback starting`);
 						try {
-							replacementCtx.ui.setEditorText(editedPrompt);
-							replacementCtx.ui.notify("Handoff ready. Submit when ready.", "info");
+							replacementCtx.ui.notify("Handoff ready.", "info");
+                            // Directly queue the message to bypass the onInputCallback race
+                            // that can require two Enter presses (old agent.run() hasn't
+                            // completed yet, so onInputCallback isn't set and text goes to
+                            // pendingUserInputs).
+                            await replacementCtx.sendUserMessage(editedPrompt);
 							log(`withSession callback complete`);
 						} catch (err: any) {
 							log(`withSession error: ${err.message}`);

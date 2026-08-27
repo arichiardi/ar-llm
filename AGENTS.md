@@ -5,16 +5,13 @@ Personal [Pi](https://pi.dev) extension packages for the Pi coding agent, publis
 ## Repository structure
 
 ```
-extensions/
-├── pi-custom-compaction/    # LLM-powered session compaction
-├── pi-handoff/              # Context handoff to new sessions
-├── pi-notify/               # Terminal notifications on agent idle
-├── pi-plan-mode/            # Read-only plan-and-execute mode
-└── pi-skill-request-params/ # Per-skill provider request params
-pi/                          # Pi agent configuration files (symlinked into ~/.config/pi)
-prompts/                     # Custom prompt templates
-skills/                      # Custom skills
+extensions/        # Pi extension packages (list with `ls extensions/`)
+pi/                # Pi agent configuration files (symlinked into ~/.config/pi)
+prompts/           # Custom prompt templates
+skills/            # Custom skills
 ```
+
+To see available extensions, run `ls extensions/` — each package is named `pi-<name>/`.
 
 Each extension lives under `extensions/<name>/` with:
 - `src/` — TypeScript source (entry point declared in `package.json` under `pi.extensions`)
@@ -32,12 +29,8 @@ npm install --ignore-scripts
 npm run typecheck
 
 # Preview what gets published for a package (dry-run)
-npm run pack:custom-compaction
-npm run pack:skill-request-params
-npm run pack:handoff
-npm run pack:notify
-npm run pack:plan-mode
-npm run pack:dir-providers
+# List available packages with `ls extensions/`, then run:
+npm run pack:<package-name>
 
 A top-level `Makefile` provides convenience targets for bulk operations:
 ```bash
@@ -106,6 +99,6 @@ An agent (LLM) can safely perform steps 1–3. Staging uploads the package to np
 
 ## License
 
-- `pi-custom-compaction`: Unlicense — substantially rewritten from earendil-works/pi (see NOTICE)
-- `pi-skill-request-params`: Unlicense — original work
-- `pi-handoff`, `pi-notify`, `pi-plan-mode`: MIT — derived from earendil-works/pi, copyright Mario Zechner
+Check each extension's `LICENSE` file for its license. Common patterns:
+- Unlicense — original work
+- MIT — derived from earendil-works/pi

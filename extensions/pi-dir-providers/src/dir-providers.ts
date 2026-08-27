@@ -75,6 +75,21 @@ function hasCliModelOverride(): boolean {
 }
 
 // ============================================================
+// Disable marker file
+// ============================================================
+
+/** Check for .pi-dir-providers-disable in cwd or any parent directory. */
+function hasDisableMarker(cwd: string): boolean {
+	const marker = ".pi-dir-providers-disable";
+	let dir = cwd;
+	while (dir !== path.parse(dir).root) {
+		if (fs.existsSync(path.join(dir, marker))) return true;
+		dir = path.dirname(dir);
+	}
+	return false;
+}
+
+// ============================================================
 // Config loading (fail open, like pi-custom-compaction)
 // ============================================================
 
@@ -107,8 +122,13 @@ export default function (pi: ExtensionAPI) {
 
 	const profile = resolveProfile(process.cwd(), CONFIG.rules);
 	const active = profile.matchedRules.length > 0;
+	const disabledByMarker = hasDisableMarker(process.cwd());
 
-	if (active) {
+	if (disabledByMarker && DEBUG) {
+		log(`${PREFIX} Disabled by marker file in ${process.cwd()}`);
+	}
+
+	if (active && !disabledByMarker) {
 		const known = enumerateKnownProviders();
 
 		for (const id of profile.allowedProviders ?? []) {
@@ -169,7 +189,7 @@ export default function (pi: ExtensionAPI) {
 			ctx.ui.notify(`${PREFIX} Config warnings:\n${CONFIG_WARNINGS.join("\n")}`, "warning");
 		}
 
-		if (!active) return;
+		if (!active || disabledByMarker) return;
 
 		ctx.ui.setStatus(
 			"dir-providers",
@@ -207,6 +227,10 @@ export default function (pi: ExtensionAPI) {
 			const current = resolveProfile(ctx.cwd, CONFIG?.rules ?? []);
 			if (current.matchedRules.length === 0) {
 				ctx.ui.notify("dir-providers: no rules match this directory", "info");
+				return;
+			}
+			if (hasDisableMarker(ctx.cwd)) {
+				ctx.ui.notify("dir-providers: disabled by .pi-dir-providers-disable marker file", "info");
 				return;
 			}
 			const lines = [

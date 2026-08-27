@@ -80,6 +80,18 @@ matching rules are **merged** together per provider id.
 
 If no rule matches, the extension does nothing.
 
+## Disable marker
+
+Create a `.pi-dir-providers-disable` file in any directory to disable the
+extension for that directory and all its subdirectories. This is useful when
+you want to temporarily bypass provider restrictions without modifying the
+config file.
+
+- The marker is checked in the current directory and all parent directories
+- When found, the extension becomes a no-op: no providers are hidden
+- The `/dir-providers` command reports "disabled by .pi-dir-providers-disable marker file"
+- Remove the file to re-enable the extension
+
 ## How it works
 
 Hiding happens at extension-factory time — before pi selects the initial

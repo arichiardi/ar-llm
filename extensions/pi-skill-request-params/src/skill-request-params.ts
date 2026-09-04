@@ -54,10 +54,10 @@ import * as path from "path";
  *   2. Expanded `<skill name="...">` block — parsed from `event.prompt`
  *   3. LLM auto-invocation — last non-system message scanned for skill paths
  *
- * Config file: `skill-request-params.json`
+ * Config file: `<agent-dir>/ar-llm/skill-request-params.json`
  * Default locations (checked in order):
- *   - $PI_CODING_AGENT_DIR/skill-request-params.json
- *   - ~/.pi/agent/skill-request-params.json
+ *   - $PI_CODING_AGENT_DIR/ar-llm/skill-request-params.json
+ *   - ~/.pi/agent/ar-llm/skill-request-params.json
  *
  * Skill names must match the `name` field in your SKILL.md frontmatter.
  * Test with:  pi -e skill-request-params.ts
@@ -166,7 +166,7 @@ function resolveConfigDir(): string {
  */
 function loadConfig(): SkillRequestConfig {
   const dir = resolveConfigDir();
-  const filePath = path.join(dir, "skill-request-params.json");
+  const filePath = path.join(dir, "ar-llm", "skill-request-params.json");
 
   if (!fs.existsSync(filePath)) {
     throw new Error(

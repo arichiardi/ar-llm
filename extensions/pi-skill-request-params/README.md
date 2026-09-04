@@ -16,6 +16,30 @@ Or try without installing:
 pi -e 'npm:@ar-llm/pi-skill-request-params'
 ```
 
+## Config
+
+Create `<agent-dir>/ar-llm/skill-request-params.json`.
+
+```json
+{
+  "providers": {
+    "lm-studio": {
+      "default": { "temperature": 0.6 },
+      "skills": {
+        "clojure-coder": { "params": { "temperature": 0.1, "top_k": 40 } }
+      }
+    }
+  }
+}
+```
+
+Resolution order (lowest → highest priority):
+
+1. `providers.<provider>.default`
+2. `providers.<provider>.models.<modelId>.default`
+3. `providers.<provider>.skills.<skillName>`
+4. `providers.<provider>.models.<modelId>.skills.<skillName>`
+
 ## License
 
 [The Unlicense](./LICENSE) — public domain, original work.

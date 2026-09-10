@@ -2,8 +2,10 @@
 # Poll vLLM /metrics every second for 5 minutes, collect histogram stats, then summarize per-request averages.
 import urllib.request, time, re, sys, os
 
-HOST=os.environ["EMACS_GPTEL_VLLM_HOST"]
-PORT=os.environ["EMACS_GPTEL_VLLM_PORT"]
+HOST=os.environ.get("LOCAL_VLLM_HOST")
+PORT=os.environ.get("LOCAL_VLLM_PORT")
+if not HOST or not PORT:
+    sys.exit("error: set LOCAL_VLLM_HOST and LOCAL_VLLM_PORT")
 URL=f"http://{HOST}:{PORT}/metrics"
 DURATION=300  # 5 min
 

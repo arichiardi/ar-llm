@@ -1,21 +1,34 @@
 ---
 name: web-searcher
 description: Search the web, read page content, and navigate through links. Use for any task that needs live web content — searching, fetching pages, following links, multi-page browsing, filling forms.
+compatibility: Prefers native MCP tools; fallback needs a shell with curl, MCP_SEARCH_URL, MCP_TEXTWEB_URL, and MCP_API_TOKEN.
 ---
 
 # Web Research (Search + Crawl + Browse)
 
-Three backends, two endpoints, all called via HTTP POST with JSON-RPC 2.0:
+## Tool access
 
-| Task | Tool | Endpoint |
-|------|------|----------|
-| Find URLs | `search` (SearXNG metasearch) | `$MCP_SEARCH_URL` (SearXN+Crawl MCP) |
-| Read content of known URLs | `crawl` (Crawl4AI extraction) | `$MCP_SEARCH_URL` (SearXN+Crawl MCP) |
-| Move through pages, click, fill forms | `textweb_*` (text-grid browser) | `$MCP_TEXTWEB_URL` (TextWeb MCP) |
+Two transports reach the same MCP servers.
 
-Responses are **plain JSON** — no SSE, no session initialization. Authenticate every call with `-H "Authorization: Bearer $MCP_API_TOKEN"`.
+1. Preferred: call the tools directly when the host exposes them
+   (`search`, `crawl`, `crawl_site`, `textweb_*`).
+2. Fallback: when no such tool is available, use the recipes in
+   [references/mcp-proxy-fallback.md](references/mcp-proxy-fallback.md).
 
-Extract text with jq: `curl -s "$MCP_SEARCH_URL" ... | jq -r '.result.content[].text'`
+If neither transport works, stop and ask the user to set
+`MCP_SEARCH_URL`, `MCP_TEXTWEB_URL`, and `MCP_API_TOKEN`.
+
+The rest of this file is transport-neutral. It names tools, not calls.
+
+## Backends
+
+Three backends on two MCP servers:
+
+| Task | Tool | Server |
+|------|------|--------|
+| Find URLs | `search` (SearXNG metasearch) | SearXN+Crawl MCP |
+| Read content of known URLs | `crawl` (Crawl4AI extraction) | SearXN+Crawl MCP |
+| Move through pages, click, fill forms | `textweb_*` (text-grid browser) | TextWeb MCP |
 
 ## Choosing between crawl and TextWeb — read this first
 
@@ -50,7 +63,7 @@ The server default per-URL `timeout` is 15 seconds. That is too short. **Always 
 1. Batch URLs — `crawl` accepts a list. Crawl all candidate pages in one call, not one call per page.
 2. `output_format`: the correct parameter name is `output_format` (not `format` or `outputFormat`). Values: `"markdown"` (default) or `"json"` (metadata + statistics).
 3. `remove_links: true` when a page is link-heavy and the links are not useful.
-4. No post-processing: parse the result directly in your LLM context. Do not pipe output through `sed`, `grep`, or extra `jq` beyond extracting `.result.content[].text`.
+4. No post-processing: parse the result directly in your LLM context. Do not pipe it through `sed`, `grep`, or `jq`.
 5. If you get `"Unknown tool"` errors, double-check the tool name (`crawl`, `crawl_site`, `search`).
 
 ### crawl_site: use with care
@@ -77,7 +90,6 @@ Tools: `textweb_navigate(url)`, `textweb_click(ref)`, `textweb_type(ref, text)`,
 
 Notes:
 - After `textweb_click` on a link you get the destination page's grid automatically — no extra navigate call.
-- Use `timeout` on every curl (30s for navigate, 15s for actions) to avoid hanging on slow pages.
 - Pass `session_id` to keep parallel workflows isolated.
 - For advanced usage (multi-step flow recipes, storage state for auth reuse, isolated sessions, retries), see the **`textweb-browser`** skill.
 
@@ -103,49 +115,3 @@ Only fall back to `crawl`/TextWeb for GitHub content `gh` cannot serve (GitHub P
 5. If you need to move through a site (pagination, sub-pages, forms): `textweb_navigate` the entry URL, then click through using refs.
 6. Answer from the retrieved content. Cite the source URL for every claim. If a page could not be retrieved, say so — never guess its content.
 
-## curl reference
-
-All calls are a single POST. Adjust `timeout`, tool name, and arguments as needed.
-
-```bash
-# Search
-timeout 60 curl -s "$MCP_SEARCH_URL" \
-  -H "Content-Type: application/json" \
-  -H "Accept: application/json, text/event-stream" \
-  -H "Authorization: Bearer $MCP_API_TOKEN" \
-  --data-raw '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"search","arguments":{"query":"your aggregated query"}}}'
-
-# Crawl (batch, raised timeout)
-timeout 60 curl -s "$MCP_SEARCH_URL" \
-  -H "Content-Type: application/json" \
-  -H "Accept: application/json, text/event-stream" \
-  -H "Authorization: Bearer $MCP_API_TOKEN" \
-  --data-raw '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"crawl","arguments":{"urls":["https://a.com","https://b.com"],"timeout":45}}}'
-
-# Crawl site (expensive — confirm with user first)
-timeout 180 curl -s "$MCP_SEARCH_URL" \
-  -H "Content-Type: application/json" \
-  -H "Accept: application/json, text/event-stream" \
-  -H "Authorization: Bearer $MCP_API_TOKEN" \
-  --data-raw '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"crawl_site","arguments":{"url":"https://example.com","max_depth":2,"max_pages":10,"timeout":120}}}'
-
-# TextWeb navigate
-timeout 30 curl -s "$MCP_TEXTWEB_URL" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $MCP_API_TOKEN" \
-  --data-raw '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"textweb_navigate","arguments":{"url":"https://example.com"}}}'
-
-# TextWeb click ref 9
-timeout 15 curl -s "$MCP_TEXTWEB_URL" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $MCP_API_TOKEN" \
-  --data-raw '{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"textweb_click","arguments":{"ref":9}}}'
-
-# TextWeb type into ref 7
-timeout 15 curl -s "$MCP_TEXTWEB_URL" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $MCP_API_TOKEN" \
-  --data-raw '{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"textweb_type","arguments":{"ref":7,"text":"hello world"}}}'
-```
-
-If `MCP_SEARCH_URL`, `MCP_TEXTWEB_URL`, or `MCP_API_TOKEN` are unset, the calls will fail — ask the user to export them first.

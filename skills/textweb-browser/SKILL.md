@@ -1,13 +1,25 @@
 ---
 name: textweb-browser
 description: Advanced text-grid browser - navigate long web forms that span multiple pages (job applications, online checkouts, sign-ups), wait for dynamic content, check field values before submit, save and reuse login state, run parallel browser sessions. For basic search and page browsing use the web-searcher skill.
+compatibility: Prefers native MCP tools; fallback needs a shell with curl, MCP_TEXTWEB_URL, and MCP_API_TOKEN.
 ---
 
 # TextWeb Browser — Advanced Reference
 
-TextWeb renders pages with headless Chromium (full JS execution) into **character grids** with `[ref]` annotations — the tool of choice for bot-protected, SPA, or dynamic pages that defeat static crawls.
+## Tool access
 
-Endpoint: `$MCP_TEXTWEB_URL` (JSON-RPC over HTTP POST). Auth: `-H "Authorization: Bearer $MCP_API_TOKEN"`. Each request is self-contained — no session initialization.
+Two transports reach the TextWeb MCP server.
+
+1. Preferred: call the `textweb_*` tools directly when the host exposes them.
+2. Fallback: when no such tool is available, use the recipes in
+   [references/mcp-proxy-fallback.md](references/mcp-proxy-fallback.md).
+
+If neither transport works, stop and ask the user to set `MCP_TEXTWEB_URL`
+and `MCP_API_TOKEN`.
+
+The rest of this file is transport-neutral. It names tools, not calls.
+
+TextWeb renders pages with headless Chromium (full JS execution) into **character grids** with `[ref]` annotations — the tool of choice for bot-protected, SPA, or dynamic pages that defeat static crawls.
 
 Grid element notation and the basic `navigate`/`click`/`type` calls: see the **web-searcher** skill. This skill covers everything beyond the basics.
 
@@ -67,60 +79,28 @@ For any flow with multiple steps, use ONE stable `session_id` for the whole flow
 5. Before the final submit, `textweb_assert_field` to validate what will be sent
 6. `textweb_storage_save` at the end if you may resume later
 
-```bash
-# Fill, then click with retries
-timeout 30 curl -s "$MCP_TEXTWEB_URL" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $MCP_API_TOKEN" \
-  --data-raw '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"textweb_click","arguments":{"ref":42,"session_id":"apply-acme","retries":3,"retry_delay_ms":400}}}'
-
-# Guard the step transition
-timeout 30 curl -s "$MCP_TEXTWEB_URL" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $MCP_API_TOKEN" \
-  --data-raw '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"textweb_wait_for","arguments":{"selector":"#step-2.active","timeout_ms":8000,"session_id":"apply-acme"}}}'
-
-# Validate before submit
-timeout 15 curl -s "$MCP_TEXTWEB_URL" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $MCP_API_TOKEN" \
-  --data-raw '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"textweb_assert_field","arguments":{"ref":77,"expected":"San Francisco","comparator":"includes","session_id":"apply-acme"}}}'
-```
+For the HTTP wire format of each call, see
+[references/mcp-proxy-fallback.md](references/mcp-proxy-fallback.md).
 
 ## Auth State Reuse (SSO / protected pages)
 
 Save the browser's storage state once (after logging in), reuse it in later sessions:
 
-```bash
-# Save after authenticating
-timeout 15 curl -s "$MCP_TEXTWEB_URL" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $MCP_API_TOKEN" \
-  --data-raw '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"textweb_storage_save","arguments":{"path":"/tmp/textweb-state.json"}}}'
+1. After authenticating, call `textweb_storage_save(path)`.
+2. At the start of a new session, call `textweb_storage_load(path)`.
 
-# Load at the start of a new session
-timeout 15 curl -s "$MCP_TEXTWEB_URL" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $MCP_API_TOKEN" \
-  --data-raw '{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"textweb_storage_load","arguments":{"path":"/tmp/textweb-state.json"}}}'
-```
+For the HTTP wire format, see
+[references/mcp-proxy-fallback.md](references/mcp-proxy-fallback.md).
 
 ## Parallel Isolated Sessions
 
 Pass a distinct `session_id` per workflow so concurrent browsing does not interfere:
 
-```bash
-timeout 30 curl -s "$MCP_TEXTWEB_URL" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $MCP_API_TOKEN" \
-  --data-raw '{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"textweb_navigate","arguments":{"url":"https://example.com","session_id":"task-a"}}}'
-```
+    textweb_navigate("https://example.com", session_id="task-a")
 
 Use `textweb_session_list` to inspect active sessions and `textweb_session_close` to clean up.
 
 ## Notes
 
-- Timeouts on every curl: 30s for `navigate`/`wait_for`, 15s for actions.
 - After `textweb_click` on a link the destination grid arrives automatically — no extra `navigate`.
 - Structured/semantic JSON output (`--output semantic`) is a CLI feature and is **not exposed via the MCP server** — MCP always returns the grid format. Use the Interactive elements index as the structured reference.
-- If `MCP_TEXTWEB_URL` or `MCP_API_TOKEN` is unset, calls will fail — ask the user to export them first.

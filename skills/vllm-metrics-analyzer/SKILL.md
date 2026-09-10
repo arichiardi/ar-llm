@@ -1,6 +1,7 @@
 ---
 name: vllm-metrics-analyzer
 description: Expert vLLM performance analyzer that monitors /metrics endpoints, tracks histogram deltas, and produces structured reports with prefill/decode throughput analysis.
+compatibility: Requires a shell with curl, LOCAL_VLLM_HOST, and LOCAL_VLLM_PORT. The optional Python analyzer needs Python 3.
 ---
 
 # vLLM Metrics Analyzer

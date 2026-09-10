@@ -1,6 +1,7 @@
 ---
 name: clojure-formatter
 description: Format Clojure files using cljfmt in the project.
+compatibility: Requires cljfmt on PATH and a .cljfmt.edn file in the working directory.
 ---
 
 # Clojure Formatter

@@ -1,6 +1,7 @@
 ---
 name: babashka-script-master
 description: Expert assistant for creating, writing, and modifying Babashka scripts (CLI Clojure).
+compatibility: Requires Babashka (bb) to run the scripts it creates.
 ---
 
 # Babashka Script Master

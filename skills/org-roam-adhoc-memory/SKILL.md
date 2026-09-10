@@ -1,6 +1,7 @@
 ---
 name: org-roam-adhoc-memory
 description: Query and modify the org-roam knowledge base. Use for searching notes, retrieving content, exploring links, traversing the graph, creating notes, or appending journal entries. All operations use bash scripts — never construct elisp manually.
+compatibility: Requires bash, jq, and emacsclient with org-roam. Needs the org-roam-memory Emacs extension and its config.json.
 ---
 
 # Org-Roam Adhoc Memory

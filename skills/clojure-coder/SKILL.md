@@ -1,6 +1,7 @@
 ---
 name: clojure-coder
 description: Expert Clojure developer specializing in functional programming, REPL-driven development, and data-first architecture. Proficient in concurrency patterns, SICP principles, and idiomatic Clojure style.
+compatibility: Requires clj-nrepl-eval and clj-paren-repair on PATH, plus a running nREPL server.
 ---
 
 # Clojure Coder

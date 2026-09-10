@@ -86,7 +86,8 @@ All scripts return clean JSON. On failure:
 
 Check errors before parsing stdout:
 ```bash
-result=$(scripts/search.sh "test" 2>/tmp/or_err) || { cat /tmp/or_err; exit 1; }
+err=$(mktemp)
+result=$(scripts/search.sh "test" 2>"$err") || { cat "$err"; exit 1; }
 echo "$result" | jq .
 ```
 
@@ -102,16 +103,18 @@ Log file paths are configured in `config.json` under the `debug` key. Paths supp
 
 ## Config
 
-All settings in `~/.pi/agent/org-roam-memory/config.json`. Example debug config:
+All settings in `$PI_CODING_AGENT_DIR/org-roam-memory/config.json` (default `~/.config/pi/agent/org-roam-memory/config.json`). Example debug config using a temp directory:
 
 ```json
 {
   "debug": {
-    "log-file": "~/tmp/org-roam-pi-memory-debug.log",
-    "context-file": "~/tmp/org-roam-pi-memory-context.log"
+    "log-file": "/tmp/org-roam-pi-memory-debug.log",
+    "context-file": "/tmp/org-roam-pi-memory-context.log"
   }
 }
 ```
+
+Use any writable temp directory, for example `/tmp` or `~/tmp`.
 
 - `log-file`: Debug log for skill scripts, TypeScript extension, and Elisp library
 - `context-file`: Separate log for full memory context output (avoids cluttering debug logs)

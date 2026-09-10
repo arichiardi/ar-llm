@@ -18,7 +18,11 @@ Set `timeout` on every curl: 30s for `textweb_navigate` and
 
 ## Reference commands
 
-Adjust `timeout`, tool name, and arguments as needed.
+Adjust `timeout`, tool name, and arguments as needed. The
+`$HOME/tmp/textweb-state.json` path is an example; use any writable temp
+directory, for example `$HOME/tmp` or `/tmp`. The JSON payload is
+single-quoted, so `$HOME` is not expanded by the shell: substitute the
+real path.
 
 ```bash
 # Fill, then click with retries
@@ -43,13 +47,13 @@ timeout 15 curl -s "$MCP_TEXTWEB_URL" \
 timeout 15 curl -s "$MCP_TEXTWEB_URL" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $MCP_API_TOKEN" \
-  --data-raw '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"textweb_storage_save","arguments":{"path":"/tmp/textweb-state.json"}}}'
+  --data-raw '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"textweb_storage_save","arguments":{"path":"$HOME/tmp/textweb-state.json"}}}'
 
 # Load at the start of a new session
 timeout 15 curl -s "$MCP_TEXTWEB_URL" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $MCP_API_TOKEN" \
-  --data-raw '{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"textweb_storage_load","arguments":{"path":"/tmp/textweb-state.json"}}}'
+  --data-raw '{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"textweb_storage_load","arguments":{"path":"$HOME/tmp/textweb-state.json"}}}'
 
 # Isolated session
 timeout 30 curl -s "$MCP_TEXTWEB_URL" \

@@ -27,6 +27,8 @@ vLLM performance monitoring expert that polls Prometheus /metrics endpoints, com
 ```shell
 LOCAL_VLLM_HOST=<your-vllm-host>
 LOCAL_VLLM_PORT=<your-vllm-port>
+VLLM_MONITOR_DURATION=300        # optional, seconds
+VLLM_MONITOR_LOG_DIR=<temp-dir>  # optional, default $TMPDIR or /tmp
 ```
 
 ### Scripts
@@ -36,10 +38,10 @@ Scripts ship with this skill:
 
 ### Running a Monitor Session
 ```shell
-# Start monitoring (5 minutes)
+# Start monitoring (default 300s; set VLLM_MONITOR_DURATION to change)
 nohup bash skills/vllm-metrics-analyzer/scripts/vllm_monitor.sh > /dev/null 2>&1 &
 MONITOR_PID=$!
-# Logs written to /tmp/vllm_monitor_YYYYMMDD_HHMMSS.log and /tmp/vllm_monitor_hist_YYYYMMDD_HHMMSS.log
+# Logs go to the temp dir: $VLLM_MONITOR_LOG_DIR, default $TMPDIR or /tmp
 ```
 
 ## Analysis Methodology
@@ -123,11 +125,13 @@ Warm cache: N/N requests (<5s prefill), Cold cache: N/N requests (≥5s)
 ## Example Analysis Commands
 
 ```shell
+LOGDIR="${VLLM_MONITOR_LOG_DIR:-${TMPDIR:-/tmp}}"
+
 # Find prompt token jumps (cold cache events)
-grep "prompt=" /tmp/vllm_monitor_*.log | grep -E "\+[1-9]" | head -10
+grep "prompt=" "$LOGDIR"/vllm_monitor_*.log | grep -E "\+[1-9]" | head -10
 
 # Extract histogram activity lines
-grep -v "^ts\|^- \|Starting\|Log:\|Done\|Main\|n_req=0$\|Histogram" /tmp/vllm_monitor_hist_*.log | column -t
+grep -v "^ts\|^- \|Starting\|Log:\|Done\|Main\|n_req=0$\|Histogram" "$LOGDIR"/vllm_monitor_hist_*.log | column -t
 
 # Calculate prefill speed for anomaly
 echo "Prompt tokens: NNN,NNN / Prefill time: NN.s = NNNN tok/s"

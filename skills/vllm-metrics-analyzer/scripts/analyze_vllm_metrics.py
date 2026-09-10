@@ -7,7 +7,7 @@ PORT=os.environ.get("LOCAL_VLLM_PORT")
 if not HOST or not PORT:
     sys.exit("error: set LOCAL_VLLM_HOST and LOCAL_VLLM_PORT")
 URL=f"http://{HOST}:{PORT}/metrics"
-DURATION=300  # 5 min
+DURATION=int(os.environ.get("VLLM_MONITOR_DURATION", "300"))
 
 HIST_LIST=[
     "vllm:request_prefill_time_seconds",

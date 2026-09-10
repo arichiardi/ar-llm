@@ -1,13 +1,15 @@
 #!/bin/bash
-# Polls vLLM /metrics every second for 5 minutes, logs gauges + histogram deltas
+# Polls vLLM /metrics once per second for a configurable window, logs gauges + histogram deltas
 set -euo pipefail
 
 HOST="${LOCAL_VLLM_HOST:?set LOCAL_VLLM_HOST}"
 PORT="${LOCAL_VLLM_PORT:?set LOCAL_VLLM_PORT}"
 URL="http://${HOST}:${PORT}/metrics"
-LOG="/tmp/vllm_monitor_$(date +%Y%m%d_%H%M%S).log"
-HIST_LOG="/tmp/vllm_monitor_hist_$(date +%Y%m%d_%H%M%S).log"
-DURATION=300  # 5 minutes
+LOG_DIR="${VLLM_MONITOR_LOG_DIR:-${TMPDIR:-/tmp}}"
+LOG_DIR="${LOG_DIR%/}"
+LOG="$LOG_DIR/vllm_monitor_$(date +%Y%m%d_%H%M%S).log"
+HIST_LOG="$LOG_DIR/vllm_monitor_hist_$(date +%Y%m%d_%H%M%S).log"
+DURATION="${VLLM_MONITOR_DURATION:-300}"
 
 echo "[$(date '+%H:%M:%S')] Starting vLLM monitor: $URL (every 1s for ${DURATION}s)" | tee "$LOG"
 echo "Histogram log: $HIST_LOG" | tee -a "$LOG"

@@ -57,14 +57,6 @@ import { convertToLlm, serializeConversation } from "@earendil-works/pi-coding-a
 // Configuration types
 // ============================================================
 
-interface RequestParamsConfig {
-  providers: Record<string, {
-    [key: string]: unknown;
-    default?: Record<string, unknown>;
-    models?: Record<string, { default?: Record<string, unknown> }>;
-  }>;
-}
-
 interface PromptConfig {
   system: string;
   user: string;
@@ -74,18 +66,39 @@ interface PromptConfig {
 interface ProviderConfig {
   enabled?: boolean;
   model?: string;
-  "request-params"?: RequestParamsConfig;
+  /**
+   * pi `StreamOptions` fields, merged over the built-in defaults:
+   * `maxTokens`, `temperature`, `cacheRetention`, `thinkingEnabled`, ...
+   *
+   * The name matches what `runtime.complete(model, context, options)` takes:
+   * `ModelsApiStreamOptions<TApi>`, which extends `StreamOptions`.
+   */
+  "stream-options"?: Record<string, unknown>;
+  /**
+   * Raw provider request-body parameters, forwarded as `StreamOptions.samplingParams`:
+   * `top_p`, `top_k`, `min_p`, `repetition_penalty`, `chat_template_kwargs`, ...
+   *
+   * pi merges these into the request body after the named fields, so they win.
+   * Only OpenAI-compatible adapters read them (completions, responses, Azure responses).
+   *
+   * `temperature` is also accepted here, even though it is a pi parameter.
+   * The extension copies it into `streamOptions`, so every API honours it.
+   */
+  "request-params"?: Record<string, unknown>;
   prompt?: PromptConfig;
 }
 
 interface CompactionConfig {
-  defaultPrompt?: PromptConfig;
+  "default-prompts"?: PromptConfig;
   providers: Record<string, ProviderConfig>;
 }
 
 // ============================================================
 // Built-in defaults
 // ============================================================
+
+/** Default response ceiling for the summarization call. */
+const DEFAULT_MAX_TOKENS = 8192;
 
 const DEFAULT_PROMPT: PromptConfig = {
   system: "You are a conversation summarizer. Create a comprehensive summary that captures all information needed to continue the work effectively.",
@@ -107,9 +120,10 @@ function resolveConfigDir(): string {
  * Returns null if no config exists for this provider, or if compaction
  * is explicitly disabled.
  */
-function loadConfig(sessionProvider: string): {
+export function loadConfig(sessionProvider: string): {
   compactionProvider: string;
   compactionModelId: string;
+  streamOptions: Record<string, unknown>;
   requestParams: Record<string, unknown>;
   prompt: PromptConfig;
 } | null {
@@ -126,6 +140,13 @@ function loadConfig(sessionProvider: string): {
 
   const raw = fs.readFileSync(filePath, "utf-8");
   const parsed: CompactionConfig = JSON.parse(raw);
+
+  if ("defaultPrompt" in parsed) {
+    console.error(
+      `[custom-compaction] "defaultPrompt" in ${filePath} is no longer supported. ` +
+      `Rename it to "default-prompts".`
+    );
+  }
 
   if (!parsed.providers) {
     console.error(
@@ -157,51 +178,70 @@ function loadConfig(sessionProvider: string): {
     return null;
   }
 
+  const legacyWarning = detectLegacyRequestParams(providerConfig);
+  if (legacyWarning) {
+    console.error(`[custom-compaction] Provider "${sessionProvider}" in ${filePath}: ${legacyWarning}`);
+  }
+
   // The compaction model is looked up within the session's provider catalog
   const compactionModel = { provider: sessionProvider, id: providerConfig.model };
 
-  // Resolve request params — keyed by provider name (not model ID) to match
-  // the config structure used by pi-skill-request-params and the README.
-  const requestParams = resolveRequestParamsForProvider(sessionProvider, providerConfig);
+  const requestParams = { ...(providerConfig["request-params"] ?? {}) };
+  const streamOptions = { ...(providerConfig["stream-options"] ?? {}) };
 
-  // Resolve prompt: provider-specific prompt overrides defaultPrompt, which
+  // v0.4.x tolerance: drop the obsolete provider wrapper and lift maxTokens
+  // into the stream options. The extension logs a warning for both.
+  // Forwarding them would send junk keys into the provider request body.
+  delete requestParams.providers;
+  if (requestParams.maxTokens !== undefined) {
+    streamOptions.maxTokens = requestParams.maxTokens;
+    delete requestParams.maxTokens;
+  }
+
+  // "request-params.temperature" is an accepted alias for the pi option
+  // "temperature". Adapters that ignore samplingParams (Anthropic, Google)
+  // would otherwise drop it. The raw key stays in request-params, so
+  // OpenAI-compatible adapters receive the same value in the body.
+  // request-params wins over stream-options, matching pi's samplingParams rule.
+  if (requestParams.temperature !== undefined) {
+    streamOptions.temperature = requestParams.temperature;
+  }
+
+  // Resolve prompt: provider-specific prompt overrides default-prompts, which
   // overrides built-in defaults
-  const prompt = providerConfig.prompt ?? parsed.defaultPrompt ?? DEFAULT_PROMPT;
+  const prompt = providerConfig.prompt ?? parsed["default-prompts"] ?? DEFAULT_PROMPT;
 
   return {
     compactionProvider: compactionModel.provider,
     compactionModelId: compactionModel.id,
+    streamOptions,
     requestParams,
     prompt,
   };
 }
 
 /**
- * Resolve per-provider/per-model request params from the config.
+ * Detects config shapes from v0.4.x and earlier.
  *
- * Config structure (mirrors pi-skill-request-params):
- *   request-params.providers.<providerName>
- *     ├── default:          { ... }      — provider-wide base params
- *     └── models.<modelId>
- *         └── default:      { ... }      — model-specific refinement
- *
- * Returns {} when no request-params are configured for this provider.
+ * Returns a human-readable message, or null when the config is up to date.
  */
-function resolveRequestParamsForProvider(
-  sessionProvider: string,
+function detectLegacyRequestParams(
   providerConfig: ProviderConfig,
-): Record<string, unknown> {
-  const rpCfg = providerConfig["request-params"];
-  if (!rpCfg) return {};
+): string | null {
+  const requestParams = providerConfig["request-params"];
+  if (!requestParams) return null;
 
-  const providerCfg = rpCfg.providers?.[sessionProvider];
-  if (!providerCfg) return {};
+  if (typeof requestParams.providers === "object" && requestParams.providers !== null) {
+    return '"request-params.providers" is no longer supported and was ignored. ' +
+      'Put the request parameters directly under "request-params".';
+  }
 
-  // Extract provider-level default params (non-models, non-default keys)
-  const { models, default: modelDefault, ...flatParams } = providerCfg;
-  // Extract model-specific default params
-  const modelParams = models?.[providerConfig.model ?? ""]?.default ?? {};
-  return Object.assign({}, flatParams, modelDefault, modelParams);
+  if ("maxTokens" in requestParams) {
+    return '"maxTokens" is a pi parameter, not a request parameter. ' +
+      'The extension moved it to "stream-options".';
+  }
+
+  return null;
 }
 
 // ============================================================
@@ -253,6 +293,8 @@ export default function (pi: ExtensionAPI) {
 			return;
 		}
     log(`Found model: ${model.provider}/${model.id}, api: ${model.api}, baseUrl: ${model.baseUrl}`);
+    log(`stream-options (defaults resolved): ${JSON.stringify(resolvedConfig.streamOptions)}`);
+    log(`request-params (samplingParams): ${JSON.stringify(resolvedConfig.requestParams)}`);
 
 		// Combine all messages for full summary
 		const allMessages = [...messagesToSummarize, ...turnPrefixMessages];
@@ -309,15 +351,19 @@ export default function (pi: ExtensionAPI) {
 					messages: summaryMessages,
 				},
 				{
-					...resolvedConfig.requestParams,
-					maxTokens: 8192,
-					signal,
+					// Built-in defaults, overridable via "stream-options".
+					maxTokens: DEFAULT_MAX_TOKENS,
 					cacheRetention: "none",
-					sessionId: uuidv7(),
 					// Disable thinking: compaction summarization is a simple text task
 					// and adaptive/budget thinking causes errors on providers that
 					// don't support it (e.g. github-copilot).
 					thinkingEnabled: false,
+					...resolvedConfig.streamOptions,
+					// Fixed internals, never overridable.
+					signal,
+					sessionId: uuidv7(),
+					// Raw provider request-body parameters.
+					samplingParams: resolvedConfig.requestParams,
 				},
 			);
 

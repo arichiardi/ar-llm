@@ -5,7 +5,14 @@
  */
 import { describe, it, mock } from "node:test";
 import assert from "node:assert/strict";
-import { dirMatches, normalizeDir, parseModelRef, resolveProfile } from "../src/match.js";
+import {
+	dirMatches,
+	normalizeDir,
+	parseModelRef,
+	providerIdsFromModelsConfig,
+	providerIdsFromModelsStore,
+	resolveProfile,
+} from "../src/match.js";
 
 describe("normalizeDir", () => {
 	const HOME = "/home/user";
@@ -137,5 +144,33 @@ describe("resolveProfile", () => {
 		];
 		const profile = resolveProfile("/git/sub/c", rules);
 		assert.deepEqual(profile.matchedRules, [0, 1]);
+	});
+});
+
+describe("providerIdsFromModelsConfig", () => {
+	it("returns provider ids from a models.json document", () => {
+		assert.deepEqual(providerIdsFromModelsConfig({ providers: { alba: {}, other: {} } }), ["alba", "other"]);
+	});
+
+	it("returns [] for a missing or malformed providers field", () => {
+		assert.deepEqual(providerIdsFromModelsConfig({}), []);
+		assert.deepEqual(providerIdsFromModelsConfig({ providers: [] }), []);
+		assert.deepEqual(providerIdsFromModelsConfig("nope"), []);
+		assert.deepEqual(providerIdsFromModelsConfig(null), []);
+	});
+});
+
+describe("providerIdsFromModelsStore", () => {
+	it("returns top-level keys of a flat models-store.json document", () => {
+		assert.deepEqual(
+			providerIdsFromModelsStore({ "llama.cpp": { models: [] }, openrouter: { models: [] } }),
+			["llama.cpp", "openrouter"],
+		);
+	});
+
+	it("returns [] for malformed input", () => {
+		assert.deepEqual(providerIdsFromModelsStore([]), []);
+		assert.deepEqual(providerIdsFromModelsStore("nope"), []);
+		assert.deepEqual(providerIdsFromModelsStore(undefined), []);
 	});
 });

@@ -115,7 +115,8 @@ provider's model set (like `models.json`), whereas an override object without
   nonexistent dirs, malformed `defaultModel`, `defaultModel` provider not in
   the rule's `allowedProviders`) produce warnings and skip the offending part.
 - Unknown provider ids in `allowedProviders` warn at startup; check actual ids
-  with `pi --list-models`.
+  with `pi --list-models`. Builtin providers plus those declared in the agent
+  dir's `models.json` and `models-store.json` are recognized.
 - If a later rule's directory is a **parent** of an earlier rule's directory (i.e.
   the broad rule appears after the narrow one), a warning is emitted at startup:
   the parent rule's `allowedProviders`/`defaultModel` will silently override the

@@ -1,6 +1,6 @@
 {
 	"name": "@ar-llm/pi-dir-providers",
-	"version": "0.2.0",
+	"version": "0.2.1",
 	"description": "Pi extension that scopes the providers visible in /model based on the working directory.",
 	"type": "module",
 	"license": "Unlicense",
@@ -25,7 +25,7 @@
 	},
 	"scripts": {
 		"typecheck": "tsc --noEmit",
-		"test": "node --import ./test/register.mjs --test test/match.test.ts test/config.test.ts"
+		"test": "node --import ./test/register.mjs --test test/match.test.ts test/config.test.ts test/providers.test.ts"
 	},
 	"peerDependencies": {
 		"@earendil-works/pi-ai": "*",

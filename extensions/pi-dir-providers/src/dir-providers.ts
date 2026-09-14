@@ -23,6 +23,7 @@ import { getBuiltinProviders } from "@earendil-works/pi-ai/providers/all";
 import { getAgentDir, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { type DirProvidersConfig, loadConfig } from "./config.js";
 import { parseModelRef, resolveProfile } from "./match.js";
+import { enumerateKnownProviders } from "./providers.js";
 
 const PREFIX = "[dir-providers]";
 
@@ -43,32 +44,6 @@ function log(msg: string) {
 // ============================================================
 // Provider enumeration
 // ============================================================
-
-/** Builtin provider ids plus provider ids declared in models.json. */
-function enumerateKnownProviders(): Set<string> {
-	const known = new Set<string>(getBuiltinProviders());
-	try {
-		// Use pi's own agent dir so we read the same models.json that pi reads.
-		const modelsPath = path.join(getAgentDir(), "models.json");
-		if (fs.existsSync(modelsPath)) {
-			const parsed: unknown = JSON.parse(fs.readFileSync(modelsPath, "utf-8"));
-			if (
-				typeof parsed === "object" &&
-				parsed !== null &&
-				"providers" in parsed &&
-				typeof (parsed as { providers?: unknown }).providers === "object" &&
-				(parsed as { providers?: unknown }).providers !== null
-			) {
-				for (const id of Object.keys((parsed as { providers: Record<string, unknown> }).providers)) {
-					known.add(id);
-				}
-			}
-		}
-	} catch {
-		// models.json is optional; enumeration falls back to builtins.
-	}
-	return known;
-}
 
 function hasCliModelOverride(): boolean {
 	return process.argv.includes("--model") || process.argv.includes("--provider");
@@ -129,7 +104,7 @@ export default function (pi: ExtensionAPI) {
 	}
 
 	if (active && !disabledByMarker) {
-		const known = enumerateKnownProviders();
+		const known = enumerateKnownProviders(getBuiltinProviders(), getAgentDir());
 
 		for (const id of profile.allowedProviders ?? []) {
 			if (!known.has(id)) {

@@ -72,6 +72,28 @@ export function resolveProfile(cwd: string, rules: Rule[]): Profile {
 	return profile;
 }
 
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Provider ids declared in a parsed models.json document
+ * (`{ "providers": { "<id>": ... } }`). Malformed input yields no ids.
+ */
+export function providerIdsFromModelsConfig(parsed: unknown): string[] {
+	if (!isPlainRecord(parsed) || !isPlainRecord(parsed.providers)) return [];
+	return Object.keys(parsed.providers);
+}
+
+/**
+ * Provider ids in a parsed models-store.json document (a flat `{ "<id>": ... }`
+ * map). pi >= 0.85 keeps dynamically refreshed and custom provider catalogs
+ * here. Malformed input yields no ids.
+ */
+export function providerIdsFromModelsStore(parsed: unknown): string[] {
+	return isPlainRecord(parsed) ? Object.keys(parsed) : [];
+}
+
 /** Parse "provider/model-id"; model ids may contain further slashes. */
 export function parseModelRef(ref: string): { provider: string; modelId: string } | undefined {
 	const slash = ref.indexOf("/");

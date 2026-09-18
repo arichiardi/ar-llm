@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ -z "${1-}" ]]; then
+  echo "Please provide a filename."
+  exit 1
+fi
+
+base=$(basename "$1")
+if [[ "$base" =~ \.[A-Za-z][A-Za-z0-9]*$ ]]; then
+  env_name=${base%.*}
+else
+  env_name=$base
+fi
+
+llm-systemctl stop "vllm@${env_name}"

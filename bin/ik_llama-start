@@ -1,0 +1,9 @@
+#!/bin/bash
+
+set -euo pipefail
+
+env_name="${1##*/}"
+env_name="${env_name%.env}"
+
+sudo systemctl --full --no-pager --machine=llama-cpp@ --user daemon-reload
+sudo systemctl --full --no-pager --machine=llama-cpp@ --user restart ik_llama@$env_name

@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -eu
+
+systemd_user=llm
+
+calling_user="$(id -un)"
+
+cmd="systemctl --full --no-pager --machine=${systemd_user}@ --user $@"
+
+if [[ "$calling_user" == "$systemd_user" ]]; then
+    exec $cmd
+else
+    exec sudo $cmd
+fi

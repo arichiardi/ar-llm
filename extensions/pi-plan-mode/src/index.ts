@@ -49,7 +49,9 @@ import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage, TextContent } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Key } from "@earendil-works/pi-tui";
-import { extractTodoItems, isSafeCommand, markCompletedSteps, type TodoItem } from "./utils.js";
+import { isSafeCommand } from "./commands.js";
+import { extractTodoItems, markCompletedSteps, type TodoItem } from "./extraction.js";
+import { planFormatPromptValues, renderPromptTemplate } from "./prompt.js";
 import { resolveConfig } from "./config.js";
 import type { PlanModeConfig, UIConfig } from "./types.js";
 
@@ -216,8 +218,8 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 		const config = getConfig();
 
 		if (planModeEnabled) {
-			const tools = config.tools.planModeTools.join(", ");
-			const prompt = config.prompts.planModeContext.replace("{tools}", tools);
+			const values = { ...planFormatPromptValues(config.planFormat), tools: config.tools.planModeTools.join(", ") };
+			const prompt = renderPromptTemplate(config.prompts.planModeContext, values);
 			return {
 				message: {
 					customType: "plan-mode-context",
@@ -230,7 +232,8 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 		if (executionMode && todoItems.length > 0) {
 			const remaining = todoItems.filter((t) => !t.completed);
 			const todoList = remaining.map((t) => `${t.step}. ${t.text}`).join("\n");
-			const prompt = config.prompts.executionContext.replace("{todoList}", todoList);
+			const values = { ...planFormatPromptValues(config.planFormat), todoList };
+			const prompt = renderPromptTemplate(config.prompts.executionContext, values);
 			return {
 				message: {
 					customType: "plan-execution-context",
@@ -276,54 +279,68 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 
 		if (!planModeEnabled || !ctx.hasUI) return;
 
+		const uiConfig = getUiConfig();
+
 		// Extract todos from last assistant message
 		const lastAssistant = [...event.messages].reverse().find(isAssistantMessage);
+		let extracted = false;
 		if (lastAssistant) {
-			const extracted = extractTodoItems(getTextContent(lastAssistant), config.planFormat);
-			if (extracted.length > 0) {
-				todoItems = extracted;
+			const items = extractTodoItems(getTextContent(lastAssistant), config.planFormat);
+			if (items.length > 0) {
+				todoItems = items;
+				extracted = true;
 			}
 		}
 
-		// Show plan steps and prompt for next action
-		if (todoItems.length > 0) {
+		persistState();
+
+		// Show plan steps when the last message contained an extractable plan
+		const hasTodos = extracted && todoItems.length > 0;
+		let planTodoListMessage: { customType: string; content: string; display: boolean } | null = null;
+		if (hasTodos) {
 			const todoListText = todoItems.map((t, i) => `${i + 1}. ☐ ${t.text}`).join("\n");
-			pi.sendMessage(
-				{
-					customType: "plan-todo-list",
-					content: `**Plan Steps (${todoItems.length}):**\n\n${todoListText}`,
-					display: true,
-				},
-				{ triggerTurn: false },
-			);
+			planTodoListMessage = {
+				customType: "plan-todo-list",
+				content: `**Plan Steps (${todoItems.length}):**\n\n${todoListText}`,
+				display: true,
+			};
+		} else {
+			ctx.ui.notify(uiConfig.notifications.planNotDetected, "info");
 		}
 
-		const choices = [
-			todoItems.length > 0 ? "Execute the plan (track progress)" : "Execute the plan",
-			"Stay in plan mode",
-			"Refine the plan",
-		];
-		const choice = await ctx.ui.select("Plan mode - what next?", choices);
+		const choice = await ctx.ui.select("Plan mode - what next?", [
+			hasTodos ? uiConfig.choices.executeWithTodos : uiConfig.choices.createPlan,
+			uiConfig.choices.stayInPlanMode,
+			uiConfig.choices.refinePlan,
+		]);
 
-		if (choice?.startsWith("Execute")) {
+		if (hasTodos && choice === uiConfig.choices.executeWithTodos) {
+			const firstTodoItem = todoItems[0];
+			if (!firstTodoItem) return;
+
 			planModeEnabled = false;
-			executionMode = todoItems.length > 0;
+			executionMode = true;
 			pi.setActiveTools(config.tools.normalModeTools);
 			updateStatus(ctx);
+			persistState();
 
-			const execMessage =
-				todoItems.length > 0
-					? `Execute the plan. Start with: ${todoItems[0].text}`
-					: "Execute the plan you just created.";
+			const remainingList = todoItems.map((t) => `${t.step}. ${t.text}`).join("\n");
+			const execMessage = `Execute the plan.\n\nRemaining steps:\n${remainingList}\n\nStart with: ${firstTodoItem.text}\nAfter completing a step, include a [DONE:n] tag in your response.`;
+			if (planTodoListMessage) pi.sendMessage(planTodoListMessage, { deliverAs: "followUp" });
 			pi.sendMessage(
 				{ customType: "plan-mode-execute", content: execMessage, display: true },
-				{ triggerTurn: true },
+				{ triggerTurn: true, deliverAs: "followUp" },
 			);
-		} else if (choice === "Refine the plan") {
+		} else if (choice === uiConfig.choices.refinePlan) {
 			const refinement = await ctx.ui.editor("Refine the plan:", "");
 			if (refinement?.trim()) {
-				pi.sendUserMessage(refinement.trim());
+				if (planTodoListMessage) pi.sendMessage(planTodoListMessage, { deliverAs: "followUp" });
+				pi.sendUserMessage(refinement.trim(), { deliverAs: "followUp" });
 			}
+		} else if (choice === uiConfig.choices.createPlan) {
+			const values = planFormatPromptValues(config.planFormat);
+			const prompt = renderPromptTemplate(config.prompts.planCreationPrompt, values);
+			pi.sendUserMessage(prompt, { deliverAs: "followUp" });
 		}
 	});
 

@@ -24,7 +24,8 @@
 		]
 	},
 	"scripts": {
-		"typecheck": "tsc --noEmit"
+		"typecheck": "tsc --noEmit",
+		"test": "node --experimental-strip-types --import ./test/ts-resolve-loader.mjs --test \"test/**/*.test.ts\""
 	},
 	"peerDependencies": {
 		"@earendil-works/pi-agent-core": "*",

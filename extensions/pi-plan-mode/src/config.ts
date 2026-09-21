@@ -4,13 +4,12 @@
  * Loads and resolves plan-mode configuration from:
  * 1. Built-in defaults
  * 2. Global config file (~/.config/pi/agent/ar-llm/plan-mode.json)
- * 3. Provider-specific overrides
  */
 
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
-import type { PlanModeConfig, ProviderConfig } from "./types.js";
+import type { PlanModeConfig, UIConfig } from "./types.js";
 
 // ============================================================
 // Built-in defaults
@@ -115,6 +114,9 @@ const DEFAULT_DONE_MARKER_PATTERN = "/\\[DONE:(\\d+)\\]/gi";
 const DEFAULT_MAX_STEP_LENGTH = 50;
 const DEFAULT_CLEAN_STEP_TEXT = true;
 
+const DEFAULT_PLAN_HEADER_HINT = "Plan:";
+const DEFAULT_STEP_PREFIX_HINT = "1.";
+
 const DEFAULT_PLAN_MODE_CONTEXT = `[PLAN MODE ACTIVE]
 You are in plan mode - a read-only exploration mode for safe code analysis.
 
@@ -126,11 +128,10 @@ Restrictions:
 Ask clarifying questions using the questionnaire tool.
 Use brave-search skill via bash for web research.
 
-Create a detailed numbered plan under a "Plan:" header:
+Create a detailed numbered plan under a "{planHeader}" header:
 
-Plan:
-1. First step description
-2. Second step description
+{planHeader}
+{stepPrefix} First step description
 ...
 
 Do NOT attempt to make changes - just describe what you would do.`;
@@ -143,6 +144,32 @@ Remaining steps:
 Execute each step in order.
 After completing a step, include a [DONE:n] tag in your response.`;
 
+const DEFAULT_PLAN_CREATION_PROMPT = `Your previous response did not contain an extractable plan.
+Respond with a plan under a "{planHeader}" header, as a numbered list of short steps (max {maxStepLength} characters each), e.g.:
+
+{planHeader}
+{stepPrefix} First step description
+
+Do not make any changes yet.`;
+
+const DEFAULT_UI_CONFIG: UIConfig = {
+  showStatusBar: true,
+  showProgressWidget: true,
+  statusBarFormat: "📋 {completed}/{total}",
+  notifications: {
+    planModeEnabled: "Plan mode enabled. Tools: {tools}",
+    planModeDisabled: "Plan mode disabled. Full access restored.",
+    noTodos: "No todos. Create a plan first with /plan",
+    planNotDetected: "No plan steps detected - the model did not use the expected plan format.",
+  },
+  choices: {
+    executeWithTodos: "Execute the plan (track progress)",
+    createPlan: "Create the plan",
+    stayInPlanMode: "Stay in plan mode",
+    refinePlan: "Refine the plan",
+  },
+};
+
 const DEFAULT_CONFIG: PlanModeConfig = {
   commands: {
     safePatterns: DEFAULT_SAFE_PATTERNS,
@@ -152,17 +179,23 @@ const DEFAULT_CONFIG: PlanModeConfig = {
     planModeTools: DEFAULT_PLAN_MODE_TOOLS,
     normalModeTools: DEFAULT_NORMAL_MODE_TOOLS,
   },
-  extraction: {
+  planFormat: {
     planHeaderPattern: DEFAULT_PLAN_HEADER_PATTERN,
     stepNumberPattern: DEFAULT_STEP_NUMBER_PATTERN,
     doneMarkerPattern: DEFAULT_DONE_MARKER_PATTERN,
     maxStepLength: DEFAULT_MAX_STEP_LENGTH,
     cleanStepText: DEFAULT_CLEAN_STEP_TEXT,
+    hints: {
+      planHeader: DEFAULT_PLAN_HEADER_HINT,
+      stepPrefix: DEFAULT_STEP_PREFIX_HINT,
+    },
   },
   prompts: {
     planModeContext: DEFAULT_PLAN_MODE_CONTEXT,
     executionContext: DEFAULT_EXECUTION_CONTEXT,
+    planCreationPrompt: DEFAULT_PLAN_CREATION_PROMPT,
   },
+  ui: DEFAULT_UI_CONFIG,
 };
 
 // ============================================================
@@ -173,7 +206,7 @@ function resolveConfigDir(): string {
   return process.env.PI_CODING_AGENT_DIR || path.join(os.homedir(), ".config", "pi", "agent");
 }
 
-function loadConfigFile(): PlanModeConfig | null {
+function loadConfigFile(): Partial<PlanModeConfig> | null {
   const dir = resolveConfigDir();
   const filePath = path.join(dir, "ar-llm", "plan-mode.json");
 
@@ -207,7 +240,7 @@ function deepMerge<T>(target: T, source: Partial<T>): T {
     ) {
       result[key] = deepMerge(targetValue as Record<string, unknown>, sourceValue as Record<string, unknown>) as T[keyof T];
     } else {
-      result[key] = sourceValue;
+      result[key] = sourceValue as T[keyof T];
     }
   }
 
@@ -229,13 +262,6 @@ export function resolveConfig(): PlanModeConfig {
   }
 
   return config;
-}
-
-/**
- * Check if plan mode is enabled (always enabled with simplified config)
- */
-export function isProviderEnabled(): boolean {
-  return true;
 }
 
 /**

@@ -50,8 +50,8 @@ import type { AssistantMessage, TextContent } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Key } from "@earendil-works/pi-tui";
 import { extractTodoItems, isSafeCommand, markCompletedSteps, type TodoItem } from "./utils.js";
-import { resolveConfig, isProviderEnabled } from "./config.js";
-import type { CommandConfig, ToolConfig, UIConfig, PlanExtractionConfig, PromptConfig, PlanModeConfig } from "./types.js";
+import { resolveConfig } from "./config.js";
+import type { PlanModeConfig, UIConfig } from "./types.js";
 
 // Type guard for assistant messages
 function isAssistantMessage(m: AgentMessage): m is AssistantMessage {
@@ -78,19 +78,17 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 		default: false,
 	});
 
-	function updateStatus(ctx: ExtensionContext): void {
-		if (!currentConfig) return;
+	function getConfig(): PlanModeConfig {
+		// Resolved once on session_start; fall back to defaults before that
+		return currentConfig ?? resolveConfig();
+	}
 
-		const uiConfig = {
-			showProgressWidget: true,
-			showStatusBar: true,
-			statusBarFormat: "📋 {completed}/{total}",
-			notifications: {
-				planModeEnabled: "Plan mode enabled. Tools: {tools}",
-				planModeDisabled: "Plan mode disabled. Full access restored.",
-				noTodos: "No todos. Create a plan first with /plan",
-			},
-		};
+	function getUiConfig(): UIConfig {
+		return getConfig().ui;
+	}
+
+	function updateStatus(ctx: ExtensionContext): void {
+		const uiConfig = getUiConfig();
 
 		// Footer status
 		if (uiConfig.showStatusBar) {
@@ -125,23 +123,25 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 	}
 
 	function togglePlanMode(ctx: ExtensionContext): void {
-		if (!currentConfig) return;
+		const config = getConfig();
+		const uiConfig = getUiConfig();
 
 		planModeEnabled = !planModeEnabled;
 		executionMode = false;
 		todoItems = [];
 
-		const tools = planModeEnabled ? currentConfig.tools.planModeTools : currentConfig.tools.normalModeTools;
+		const tools = planModeEnabled ? config.tools.planModeTools : config.tools.normalModeTools;
 
 		if (planModeEnabled) {
-			pi.setActiveTools(currentConfig.tools.planModeTools);
+			pi.setActiveTools(config.tools.planModeTools);
 			const msg = uiConfig.notifications.planModeEnabled.replace("{tools}", tools.join(", "));
 			ctx.ui.notify(msg);
 		} else {
-			pi.setActiveTools(currentConfig.tools.normalModeTools);
+			pi.setActiveTools(config.tools.normalModeTools);
 			ctx.ui.notify(uiConfig.notifications.planModeDisabled);
 		}
 		updateStatus(ctx);
+		persistState();
 	}
 
 	function persistState(): void {
@@ -161,7 +161,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 		description: "Show current plan todo list",
 		handler: async (_args, ctx) => {
 			if (todoItems.length === 0) {
-				ctx.ui.notify(uiConfig.notifications.noTodos, "info");
+				ctx.ui.notify(getUiConfig().notifications.noTodos, "info");
 				return;
 			}
 			const list = todoItems.map((item, i) => `${i + 1}. ${item.completed ? "✓" : "○"} ${item.text}`).join("\n");
@@ -176,10 +176,10 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 
 	// Block destructive bash commands in plan mode
 	pi.on("tool_call", async (event) => {
-		if (!planModeEnabled || !currentConfig || event.toolName !== "bash") return;
+		if (!planModeEnabled || event.toolName !== "bash") return;
 
 		const command = event.input.command as string;
-		if (!isSafeCommand(command, currentConfig.commands)) {
+		if (!isSafeCommand(command, getConfig().commands)) {
 			return {
 				block: true,
 				reason: `Plan mode: command blocked (not allowlisted). Use /plan to disable plan mode first.\nCommand: ${command}`,
@@ -213,11 +213,11 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 
 	// Inject plan/execution context before agent starts
 	pi.on("before_agent_start", async () => {
-		if (!currentConfig) return;
+		const config = getConfig();
 
 		if (planModeEnabled) {
-			const tools = currentConfig.tools.planModeTools.join(", ");
-			const prompt = currentConfig.prompts.planModeContext.replace("{tools}", tools);
+			const tools = config.tools.planModeTools.join(", ");
+			const prompt = config.prompts.planModeContext.replace("{tools}", tools);
 			return {
 				message: {
 					customType: "plan-mode-context",
@@ -230,7 +230,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 		if (executionMode && todoItems.length > 0) {
 			const remaining = todoItems.filter((t) => !t.completed);
 			const todoList = remaining.map((t) => `${t.step}. ${t.text}`).join("\n");
-			const prompt = currentConfig.prompts.executionContext.replace("{todoList}", todoList);
+			const prompt = config.prompts.executionContext.replace("{todoList}", todoList);
 			return {
 				message: {
 					customType: "plan-execution-context",
@@ -243,11 +243,11 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 
 	// Track progress after each turn
 	pi.on("turn_end", async (event, ctx) => {
-		if (!executionMode || !currentConfig || todoItems.length === 0) return;
+		if (!executionMode || todoItems.length === 0) return;
 		if (!isAssistantMessage(event.message)) return;
 
 		const text = getTextContent(event.message);
-		if (markCompletedSteps(text, todoItems, currentConfig.extraction) > 0) {
+		if (markCompletedSteps(text, todoItems, getConfig().planFormat) > 0) {
 			updateStatus(ctx);
 		}
 		persistState();
@@ -255,7 +255,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 
 	// Handle plan completion and plan mode UI
 	pi.on("agent_end", async (event, ctx) => {
-		if (!currentConfig) return;
+		const config = getConfig();
 
 		// Check if execution is complete
 		if (executionMode && todoItems.length > 0) {
@@ -267,7 +267,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 				);
 				executionMode = false;
 				todoItems = [];
-				pi.setActiveTools(currentConfig.tools.normalModeTools);
+				pi.setActiveTools(config.tools.normalModeTools);
 				updateStatus(ctx);
 				persistState(); // Save cleared state so resume doesn't restore old execution mode
 			}
@@ -279,7 +279,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 		// Extract todos from last assistant message
 		const lastAssistant = [...event.messages].reverse().find(isAssistantMessage);
 		if (lastAssistant) {
-			const extracted = extractTodoItems(getTextContent(lastAssistant), currentConfig.extraction);
+			const extracted = extractTodoItems(getTextContent(lastAssistant), config.planFormat);
 			if (extracted.length > 0) {
 				todoItems = extracted;
 			}
@@ -308,7 +308,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 		if (choice?.startsWith("Execute")) {
 			planModeEnabled = false;
 			executionMode = todoItems.length > 0;
-			pi.setActiveTools(currentConfig.tools.normalModeTools);
+			pi.setActiveTools(config.tools.normalModeTools);
 			updateStatus(ctx);
 
 			const execMessage =
@@ -331,6 +331,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 	pi.on("session_start", async (_event, ctx) => {
 		// Load configuration
 		currentConfig = resolveConfig();
+		const config = currentConfig;
 
 		if (pi.getFlag("plan") === true) {
 			planModeEnabled = true;
@@ -372,11 +373,11 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 				}
 			}
 			const allText = messages.map(getTextContent).join("\n");
-			markCompletedSteps(allText, todoItems, currentConfig.extraction);
+			markCompletedSteps(allText, todoItems, config.planFormat);
 		}
 
 		if (planModeEnabled) {
-			pi.setActiveTools(currentConfig.tools.planModeTools);
+			pi.setActiveTools(config.tools.planModeTools);
 		}
 		updateStatus(ctx);
 	});

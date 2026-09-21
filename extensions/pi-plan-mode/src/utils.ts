@@ -28,7 +28,7 @@
  * SOFTWARE.
  */
 
-import type { CommandConfig, PlanExtractionConfig } from "./types.js";
+import type { CommandConfig, PlanFormatConfig } from "./types.js";
 
 /**
  * Check if a command is safe (allowed in plan mode)
@@ -50,9 +50,33 @@ export interface TodoItem {
 }
 
 /**
+ * Render a prompt template by substituting {placeholder} tokens.
+ *
+ * Plain string substitution only: unknown placeholders are left untouched so
+ * a typo in a template is visible rather than silently blanked.
+ */
+export function renderPromptTemplate(template: string, values: Record<string, string>): string {
+	return template.replace(/\{(\w+)\}/g, (match, key: string) =>
+		Object.prototype.hasOwnProperty.call(values, key) ? values[key] : match,
+	);
+}
+
+/**
+ * The values shared by every prompt template, derived from the plan format
+ * config. Callers merge in their own dynamic values ({tools}, {todoList}).
+ */
+export function planFormatPromptValues(config: PlanFormatConfig): Record<string, string> {
+	return {
+		planHeader: config.hints.planHeader,
+		stepPrefix: config.hints.stepPrefix,
+		maxStepLength: String(config.maxStepLength),
+	};
+}
+
+/**
  * Clean step text by removing markdown formatting and normalizing
  */
-export function cleanStepText(text: string, config: PlanExtractionConfig): string {
+export function cleanStepText(text: string, config: PlanFormatConfig): string {
 	if (!config.cleanStepText) return text;
 
 	let cleaned = text
@@ -77,7 +101,7 @@ export function cleanStepText(text: string, config: PlanExtractionConfig): strin
 /**
  * Extract todo items from a plan message
  */
-export function extractTodoItems(message: string, config: PlanExtractionConfig): TodoItem[] {
+export function extractTodoItems(message: string, config: PlanFormatConfig): TodoItem[] {
 	const items: TodoItem[] = [];
 
 	const headerPattern = new RegExp(config.planHeaderPattern.slice(1, -1), "i");
@@ -105,7 +129,7 @@ export function extractTodoItems(message: string, config: PlanExtractionConfig):
 /**
  * Extract completed step numbers from a message
  */
-export function extractDoneSteps(message: string, config: PlanExtractionConfig): number[] {
+export function extractDoneSteps(message: string, config: PlanFormatConfig): number[] {
 	const steps: number[] = [];
 	const doneMarkerRegex = new RegExp(config.doneMarkerPattern.slice(1, -1), "gi");
 
@@ -119,7 +143,7 @@ export function extractDoneSteps(message: string, config: PlanExtractionConfig):
 /**
  * Mark steps as completed based on [DONE:n] markers in text
  */
-export function markCompletedSteps(text: string, items: TodoItem[], config: PlanExtractionConfig): number {
+export function markCompletedSteps(text: string, items: TodoItem[], config: PlanFormatConfig): number {
 	const doneSteps = extractDoneSteps(text, config);
 	for (const step of doneSteps) {
 		const item = items.find((t) => t.step === step);

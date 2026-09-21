@@ -1,8 +1,9 @@
 /**
  * Plan Mode Configuration Types
  *
- * Configuration schema for plan-mode extension.
- * Supports provider-aware configuration similar to pi-custom-compaction.
+ * Configuration schema for the plan-mode extension.
+ * Every knob described here can be overridden in
+ * ~/.config/pi/agent/ar-llm/plan-mode.json.
  */
 
 /**
@@ -36,11 +37,33 @@ export interface ToolConfig {
 }
 
 /**
- * Plan extraction configuration
+ * Human-readable half of the plan format contract.
+ *
+ * These are plain strings (no regex) injected into the prompt templates via
+ * the {planHeader} and {stepPrefix} placeholders. They must describe the same
+ * format the PlanFormatConfig patterns parse; keeping both in one section
+ * makes that contract explicit.
  */
-export interface PlanExtractionConfig {
+export interface PlanFormatHints {
   /**
-   * Regex pattern to detect the "Plan:" header section
+   * Header the model should write its plan under
+   * @default "Plan:"
+   */
+  planHeader: string;
+  /**
+   * Prefix for the first step, to show numbering style (e.g. "1.")
+   * @default "1."
+   */
+  stepPrefix: string;
+}
+
+/**
+ * Plan format configuration: how the model should write a plan (hints) and
+ * how the extension reads it back (patterns).
+ */
+export interface PlanFormatConfig {
+  /**
+   * Regex pattern to detect the plan header section
    * @default /\*{0,2}Plan:\*{0,2}\s*\n/i
    */
   planHeaderPattern: string;
@@ -64,6 +87,10 @@ export interface PlanExtractionConfig {
    * @default /\[DONE:(\d+)\]/gi
    */
   doneMarkerPattern: string;
+  /**
+   * Human-readable words for the prompt templates
+   */
+  hints: PlanFormatHints;
 }
 
 /**
@@ -72,12 +99,63 @@ export interface PlanExtractionConfig {
 export interface PromptConfig {
   /**
    * System prompt for plan mode context
+   * Placeholders: {tools}, {planHeader}, {stepPrefix}, {maxStepLength}
    */
   planModeContext: string;
   /**
    * System prompt for execution mode context
+   * Placeholders: {todoList}, {planHeader}, {stepPrefix}, {maxStepLength}
    */
   executionContext: string;
+  /**
+   * User prompt sent when no plan steps could be extracted, asking the model
+   * to produce an extractable plan.
+   * Placeholders: {planHeader}, {stepPrefix}, {maxStepLength}
+   */
+  planCreationPrompt: string;
+}
+
+/**
+ * UI configuration
+ */
+export interface UIConfig {
+  /**
+   * Show the plan-mode indicator in the status bar
+   * @default true
+   */
+  showStatusBar: boolean;
+  /**
+   * Show the progress widget with the todo list during execution
+   * @default true
+   */
+  showProgressWidget: boolean;
+  /**
+   * Status bar format. Placeholders: {completed}, {total}, {mode}
+   * @default "📋 {completed}/{total}"
+   */
+  statusBarFormat: string;
+  /**
+   * Notification messages
+   */
+  notifications: {
+    /** Placeholder: {tools} */
+    planModeEnabled: string;
+    planModeDisabled: string;
+    noTodos: string;
+    /** Shown when the model's last message contained no extractable plan steps */
+    planNotDetected: string;
+  };
+  /**
+   * Labels for the "Plan mode - what next?" selection prompt
+   */
+  choices: {
+    /** Shown when plan steps were extracted */
+    executeWithTodos: string;
+    /** Shown when no plan steps were extracted */
+    createPlan: string;
+    stayInPlanMode: string;
+    refinePlan: string;
+  };
 }
 
 /**
@@ -87,17 +165,21 @@ export interface PlanModeConfig {
   /**
    * Command allowlists
    */
-  commands?: CommandConfig;
+  commands: CommandConfig;
   /**
    * Tool restrictions
    */
-  tools?: ToolConfig;
+  tools: ToolConfig;
   /**
-   * Plan extraction settings
+   * Plan format contract (patterns + prompt hints)
    */
-  extraction?: PlanExtractionConfig;
+  planFormat: PlanFormatConfig;
   /**
    * System prompts
    */
-  prompts?: PromptConfig;
+  prompts: PromptConfig;
+  /**
+   * UI settings
+   */
+  ui: UIConfig;
 }

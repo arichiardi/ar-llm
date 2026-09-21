@@ -1,6 +1,6 @@
 {
 	"name": "@ar-llm/pi-plan-mode",
-	"version": "0.1.0",
+	"version": "0.2.0",
 	"description": "Pi extension that adds a read-only plan mode for safe code exploration, step tracking, and constrained tool execution.",
 	"type": "module",
 	"license": "MIT",

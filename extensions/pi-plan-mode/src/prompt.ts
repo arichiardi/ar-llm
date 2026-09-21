@@ -10,7 +10,7 @@
  * MIT License - Copyright (c) 2025 Mario Zechner
  */
 
-import type { PlanFormatConfig } from "./types.js";
+import type { PlanFormatConfig } from "./types.ts";
 
 /**
  * Render a prompt template by substituting {placeholder} tokens.

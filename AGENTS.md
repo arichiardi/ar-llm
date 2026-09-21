@@ -45,7 +45,7 @@ make help           # list all available targets
 - All extensions are TypeScript, loaded by pi via [jiti](https://github.com/unjs/jiti) — no compilation step needed.
 - Root `tsconfig.json` sets `"module": "NodeNext"`, `"moduleResolution": "NodeNext"`, `"strict": true`, `"noEmit": true`.
 - Each package `tsconfig.json` extends the root and sets `"rootDir": "."`.
-- Relative imports between files in the same package must use `.js` extensions (NodeNext requirement), e.g. `import { foo } from "./utils.js"`.
+- Relative imports between files in the same package use `.ts` extensions, e.g. `import { foo } from "./utils.ts"`. Because pi loads extensions through jiti with no compilation step, `.ts` is the Node-native specifier and works with `node --test` directly. Packages that use `.ts` specifiers must enable `allowImportingTsExtensions` in their `tsconfig.json`. Older packages may still use `.js` specifiers (the compiled-output convention); migrating them is optional and in progress.
 - `@earendil-works/pi-coding-agent`, `@earendil-works/pi-ai`, `@earendil-works/pi-agent-core`, `@earendil-works/pi-tui` are `peerDependencies` — never bundle them.
 
 ## Adding a new extension

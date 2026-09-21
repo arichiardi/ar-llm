@@ -49,11 +49,11 @@ import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage, TextContent } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Key } from "@earendil-works/pi-tui";
-import { isSafeCommand } from "./commands.js";
-import { extractTodoItems, markCompletedSteps, type TodoItem } from "./extraction.js";
-import { planFormatPromptValues, renderPromptTemplate } from "./prompt.js";
-import { resolveConfig } from "./config.js";
-import type { PlanModeConfig, UIConfig } from "./types.js";
+import { isSafeCommand } from "./commands.ts";
+import { extractTodoItems, markCompletedSteps, type TodoItem } from "./extraction.ts";
+import { planFormatPromptValues, renderPromptTemplate } from "./prompt.ts";
+import { resolveConfig } from "./config.ts";
+import type { PlanModeConfig, UIConfig } from "./types.ts";
 
 // Type guard for assistant messages
 function isAssistantMessage(m: AgentMessage): m is AssistantMessage {

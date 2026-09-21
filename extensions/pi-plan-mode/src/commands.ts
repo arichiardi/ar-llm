@@ -7,8 +7,8 @@
  * MIT License - Copyright (c) 2025 Mario Zechner
  */
 
-import { toRegExp } from "./regex.js";
-import type { CommandConfig } from "./types.js";
+import { toRegExp } from "./regex.ts";
+import type { CommandConfig } from "./types.ts";
 
 /**
  * Check if a command is safe (allowed in plan mode)

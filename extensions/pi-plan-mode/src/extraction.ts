@@ -8,8 +8,8 @@
  * MIT License - Copyright (c) 2025 Mario Zechner
  */
 
-import { toRegExp } from "./regex.js";
-import type { PlanFormatConfig } from "./types.js";
+import { toRegExp } from "./regex.ts";
+import type { PlanFormatConfig } from "./types.ts";
 
 export interface TodoItem {
 	step: number;

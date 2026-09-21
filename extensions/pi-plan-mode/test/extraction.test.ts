@@ -6,8 +6,8 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { cleanStepText, extractDoneSteps, extractTodoItems, markCompletedSteps } from "../src/extraction.js";
-import type { PlanFormatConfig } from "../src/types.js";
+import { cleanStepText, extractDoneSteps, extractTodoItems, markCompletedSteps } from "../src/extraction.ts";
+import type { PlanFormatConfig } from "../src/types.ts";
 
 function planFormat(overrides: Partial<PlanFormatConfig> = {}): PlanFormatConfig {
 	return {

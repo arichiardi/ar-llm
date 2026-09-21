@@ -9,7 +9,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
-import type { PlanModeConfig, UIConfig } from "./types.js";
+import type { PlanModeConfig, UIConfig } from "./types.ts";
 
 // ============================================================
 // Built-in defaults

@@ -48,6 +48,65 @@ make help           # list all available targets
 - Relative imports between files in the same package use `.ts` extensions, e.g. `import { foo } from "./utils.ts"`. Because pi loads extensions through jiti with no compilation step, `.ts` is the Node-native specifier and works with `node --test` directly. Packages that use `.ts` specifiers must enable `allowImportingTsExtensions` in their `tsconfig.json`. Older packages may still use `.js` specifiers (the compiled-output convention); migrating them is optional and in progress.
 - `@earendil-works/pi-coding-agent`, `@earendil-works/pi-ai`, `@earendil-works/pi-agent-core`, `@earendil-works/pi-tui` are `peerDependencies` — never bundle them.
 
+## Elisp conventions
+
+Some extensions include Emacs Lisp libraries (e.g. `org-roam-pi-memory.el`).
+Never paper over unbalanced delimiters by guessing. Repair parens interactively in
+the running Emacs, and let `electric-pair-mode` insert/balance them for you.
+
+All Emacs operations go through `emacsclient` (never launch a bare `emacs`).
+
+### Repairing unbalanced parens with electric-pair-mode
+
+1. **Sanity-check the file first** to see whether anything is actually broken:
+   ```bash
+   emacsclient --eval '(with-temp-buffer
+     (insert-file-contents "path/to/file.el")
+     (condition-case err (progn (check-parens) "PARENS_OK")
+       (error (format "PARENS_ERR: %s" err))))'
+   ```
+2. **Open the file in the running Emacs** and enable `electric-pair-mode` in its
+   buffer so matching delimiters are inserted/balanced as you type:
+   ```bash
+   emacsclient --eval '(progn
+     (find-file "path/to/file.el")
+     (electric-pair-mode 1)
+     (goto-char (point-min))
+     "opened")'
+   ```
+   Alternatively, turn it on globally for the session:
+   ```bash
+   emacsclient --eval '(electric-pair-mode 1)'
+   ```
+3. **Fix the unbalanced region in the buffer**, relying on electric-pair to keep
+   delimiters matched: place point where the imbalance starts, delete the
+   offending `(`/`)` and re-type it so its partner is auto-inserted, or use
+   `electric-pair-...` commands. Prefer small, local edits over re-typing whole
+   forms.
+4. **Re-check the buffer** without saving yet:
+   ```bash
+   emacsclient --eval '(with-current-buffer (find-file-noselect "path/to/file.el")
+     (condition-case err (progn (check-parens) "PARENS_OK")
+       (error (format "PARENS_ERR: %s" err))))'
+   ```
+   Repeat steps 3-4 until it reports `PARENS_OK`.
+5. **Save the buffer** once it is clean:
+   ```bash
+   emacsclient --eval '(with-current-buffer (find-file-noselect "path/to/file.el")
+     (save-buffer) "saved")'
+   ```
+6. **Confirm it loads** (and, where relevant, byte-compiles without errors):
+   ```bash
+   emacsclient --eval '(progn
+     (add-to-list (quote load-path) "path/to")
+     (load "file" nil t)
+     "LOADED")'
+   ```
+   If you byte-compile to check for warnings, delete the generated `.elc`
+   afterwards so it does not shadow later edits of the `.el` source.
+
+Never use `clj-paren-repair` on `.el` files — that tool is for Clojure only.
+
 ## Adding a new extension
 
 1. Create `extensions/pi-<name>/src/<name>.ts`

@@ -54,7 +54,7 @@ Plan mode provides a safe, read-only environment for code exploration and planni
 
 ## Configuration
 
-Create a config file at `~/.config/pi/agent/ar-llm/plan-mode.json` to customize behavior. Every section is optional and deep-merged over the built-in defaults.
+Create a config file at `~/.config/pi/agent/ar-llm/plan-mode.json` to customize behavior. Every section is optional and deep-merged over the built-in defaults. A complete sample, equal to the built-in defaults, lives in the repository as [`plan-mode.example.json`](./plan-mode.example.json). Copy it and edit the sections you want.
 
 ### Example Configuration
 

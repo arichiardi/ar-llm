@@ -1,0 +1,140 @@
+{
+  "commands": {
+    "safePatterns": [
+      "/^\\s*cat\\b/",
+      "/^\\s*head\\b/",
+      "/^\\s*tail\\b/",
+      "/^\\s*less\\b/",
+      "/^\\s*more\\b/",
+      "/^\\s*grep\\b/",
+      "/^\\s*find\\b/",
+      "/^\\s*ls\\b/",
+      "/^\\s*pwd\\b/",
+      "/^\\s*echo\\b/",
+      "/^\\s*printf\\b/",
+      "/^\\s*wc\\b/",
+      "/^\\s*sort\\b/",
+      "/^\\s*uniq\\b/",
+      "/^\\s*diff\\b/",
+      "/^\\s*file\\b/",
+      "/^\\s*stat\\b/",
+      "/^\\s*du\\b/",
+      "/^\\s*df\\b/",
+      "/^\\s*tree\\b/",
+      "/^\\s*which\\b/",
+      "/^\\s*whereis\\b/",
+      "/^\\s*type\\b/",
+      "/^\\s*env\\b/",
+      "/^\\s*printenv\\b/",
+      "/^\\s*uname\\b/",
+      "/^\\s*whoami\\b/",
+      "/^\\s*id\\b/",
+      "/^\\s*date\\b/",
+      "/^\\s*cal\\b/",
+      "/^\\s*uptime\\b/",
+      "/^\\s*ps\\b/",
+      "/^\\s*top\\b/",
+      "/^\\s*htop\\b/",
+      "/^\\s*free\\b/",
+      "/^\\s*git\\s+(status|log|diff|show|branch|remote|config\\s+--get)/i",
+      "/^\\s*git\\s+ls-/i",
+      "/^\\s*npm\\s+(list|ls|view|info|search|outdated|audit)/i",
+      "/^\\s*yarn\\s+(list|info|why|audit)/i",
+      "/^\\s*node\\s+--version/i",
+      "/^\\s*python\\s+--version/i",
+      "/^\\s*curl\\s/i",
+      "/^\\s*wget\\s+-O\\s*-/i",
+      "/^\\s*jq\\b/",
+      "/^\\s*sed\\s+-n/i",
+      "/^\\s*awk\\b/",
+      "/^\\s*rg\\b/",
+      "/^\\s*fd\\b/",
+      "/^\\s*bat\\b/",
+      "/^\\s*eza\\b/"
+    ],
+    "destructivePatterns": [
+      "/\\brm\\b/i",
+      "/\\brmdir\\b/i",
+      "/\\bmv\\b/i",
+      "/\\bcp\\b/i",
+      "/\\bmkdir\\b/i",
+      "/\\btouch\\b/i",
+      "/\\bchmod\\b/i",
+      "/\\bchown\\b/i",
+      "/\\bchgrp\\b/i",
+      "/\\bln\\b/i",
+      "/\\btee\\b/i",
+      "/\\btruncate\\b/i",
+      "/\\bdd\\b/i",
+      "/\\bshred\\b/i",
+      "/(^|[^<])>(?!>)/",
+      "/>>/",
+      "/\\bnpm\\s+(install|uninstall|update|ci|link|publish)/i",
+      "/\\byarn\\s+(add|remove|install|publish)/i",
+      "/\\bpnpm\\s+(add|remove|install|publish)/i",
+      "/\\bpip\\s+(install|uninstall)/i",
+      "/\\bapt(-get)?\\s+(install|remove|purge|update|upgrade)/i",
+      "/\\bbrew\\s+(install|uninstall|upgrade)/i",
+      "/\\bgit\\s+(add|commit|push|pull|merge|rebase|reset|checkout|branch\\s+-[dD]|stash|cherry-pick|revert|tag|init|clone)/i",
+      "/\\bsudo\\b/i",
+      "/\\bsu\\b/i",
+      "/\\bkill\\b/i",
+      "/\\bpkill\\b/i",
+      "/\\bkillall\\b/i",
+      "/\\breboot\\b/i",
+      "/\\bshutdown\\b/i",
+      "/\\bsystemctl\\s+(start|stop|restart|enable|disable)/i",
+      "/\\bservice\\s+\\S+\\s+(start|stop|restart)/i",
+      "/\\b(vim?|nano|emacs|code|subl)\\b/i"
+    ]
+  },
+  "tools": {
+    "planModeTools": [
+      "read",
+      "bash",
+      "grep",
+      "find",
+      "ls",
+      "questionnaire"
+    ],
+    "normalModeTools": [
+      "read",
+      "bash",
+      "edit",
+      "write"
+    ]
+  },
+  "planFormat": {
+    "planHeaderPattern": "/\\*{0,2}Plan:\\*{0,2}\\s*\\n/i",
+    "stepNumberPattern": "/^\\s*(\\d+)[.)]\\s+\\*{0,2}([^*\\n]+)/gm",
+    "doneMarkerPattern": "/\\[DONE:(\\d+)\\]/gi",
+    "maxStepLength": 50,
+    "cleanStepText": true,
+    "hints": {
+      "planHeader": "Plan:",
+      "stepPrefix": "1."
+    }
+  },
+  "prompts": {
+    "planModeContext": "[PLAN MODE ACTIVE]\nYou are in plan mode - a read-only exploration mode for safe code analysis.\n\nRestrictions:\n- You can only use: {tools}\n- You CANNOT use: edit, write (file modifications are disabled)\n- Bash is restricted to an allowlist of read-only commands\n\nAsk clarifying questions using the questionnaire tool.\nUse brave-search skill via bash for web research.\n\nCreate a detailed numbered plan under a \"{planHeader}\" header:\n\n{planHeader}\n{stepPrefix} First step description\n...\n\nDo NOT attempt to make changes - just describe what you would do.",
+    "executionContext": "[EXECUTING PLAN - Full tool access enabled]\n\nRemaining steps:\n{todoList}\n\nExecute each step in order.\nAfter completing a step, include a [DONE:n] tag in your response.",
+    "planCreationPrompt": "Your previous response did not contain an extractable plan.\nRespond with a plan under a \"{planHeader}\" header, as a numbered list of short steps (max {maxStepLength} characters each), e.g.:\n\n{planHeader}\n{stepPrefix} First step description\n\nDo not make any changes yet."
+  },
+  "ui": {
+    "showStatusBar": true,
+    "showProgressWidget": true,
+    "statusBarFormat": "📋 {completed}/{total}",
+    "notifications": {
+      "planModeEnabled": "Plan mode enabled. Tools: {tools}",
+      "planModeDisabled": "Plan mode disabled. Full access restored.",
+      "noTodos": "No todos. Create a plan first with /plan",
+      "planNotDetected": "No plan steps detected - the model did not use the expected plan format."
+    },
+    "choices": {
+      "executeWithTodos": "Execute the plan (track progress)",
+      "createPlan": "Create the plan",
+      "stayInPlanMode": "Stay in plan mode",
+      "refinePlan": "Refine the plan"
+    }
+  }
+}

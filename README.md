@@ -91,6 +91,14 @@ sudo ln -sfn ../../opt/llm/vllm/conf  root/etc/conf.d/vllm
 
 ```bash
 sudo rsync -a root/. /
+
+# /opt/llm is shared: group-writable dirs, world-readable files, and only the
+# llm user/group may execute the bin/ helpers
+sudo chown -R llm:llm /opt/llm
+sudo find /opt/llm -type d -exec chmod 2775 {} ';'
+sudo find /opt/llm -type f -exec chmod 664 {} ';'
+sudo find /opt/llm/bin -type f -exec chmod 774 {} ';'
+
 sudo -u llm systemctl --user daemon-reload
 ```
 

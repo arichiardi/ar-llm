@@ -26,8 +26,8 @@ PodmanArgs=--ipc=host
 
 PublishPort=12434:8000
 
-EnvironmentFile=/opt/llm/vllm/conf/%i.env
-EnvironmentFile=/opt/llm/vllm/conf/common.env
+EnvironmentFile=/etc/conf.d/vllm/%i.env
+EnvironmentFile=/etc/conf.d/vllm/common.env
 
 # container runs as root, so no keep-id
 PodmanArgs=--pull=never --userns=""

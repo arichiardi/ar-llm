@@ -1,0 +1,18 @@
+[Unit]
+Description=ik_llama.cpp server (parameterized)
+After=syslog.target network.target local-fs.target remote-fs.target nss-lookup.target
+
+[Service]
+WorkingDirectory=/var/lib/llm/llama-cpp
+Type=simple
+Environment=LD_LIBRARY_PATH=/opt/ik_llama/lib
+EnvironmentFile=/etc/conf.d/llama/%i
+ExecStart=/opt/ik_llama/bin/llama-server $LLAMA_ARGS
+ExecReload=/bin/kill -s HUP $MAINPID
+Restart=on-failure
+
+# kap
+SyslogIdentifier=%N
+
+[Install]
+WantedBy=multi-user.target

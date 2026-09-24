@@ -1,0 +1,25 @@
+[Unit]
+Description=llama.cpp server (router mode)
+StartLimitIntervalSec=1m
+StartLimitBurst=10000
+After=syslog.target network.target local-fs.target remote-fs.target nss-lookup.target
+
+[Service]
+Type=simple
+Environment=LD_LIBRARY_PATH=/opt/llama.cpp/lib
+EnvironmentFile=/etc/conf.d/llama/common
+ExecStart=/opt/llama.cpp/bin/llama-server
+ExecReload=/bin/kill -s HUP $MAINPID
+Restart=never
+StandardOutput=journal
+StandardError=journal
+
+# Added
+RestartSec=10
+SyslogIdentifier=%N
+SystemCallArchitectures=native
+MemoryDenyWriteExecute=true
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

@@ -41,10 +41,60 @@ extensions/
 └── pi-skill-request-params/ # Per-skill provider request params
 pi/                          # Pi agent configuration files
 prompts/                     # Custom prompt templates
+root/                        # Byte-for-byte copy of the LLM box's system files
 skills/                      # Custom skills
 ```
 
 Each extension package contains its own `package.json`, `README.md`, `LICENSE`, `tsconfig.json`, and TypeScript source under `src/`.
+
+## LLM box system files (`root/`)
+
+`root/` is a byte-for-byte copy of the system files that make up the LLM server setup: everything is stored at its literal on-disk path, so the tree is self-documenting and deployable as-is.
+
+```
+root/
+├── etc/conf.d/                              # symlinks into /opt/llm
+│   ├── llama -> ../../opt/llm/llama/conf
+│   └── vllm  -> ../../opt/llm/vllm/conf
+├── opt/llm/
+│   ├── bin/                                 # vllm-build-cmd
+│   ├── chat-templates/                      # .jinja chat templates
+│   ├── llama/conf/                          # llama-server env files
+│   ├── mcp-proxy/Containerfile
+│   └── vllm/                                # conf/, Containerfile, entrypoint
+└── var/lib/llm/.config/systemd/user/        # llama-server, ik_llama@, vllm@
+```
+
+### Recreating the copy from a live box
+
+Files are mirrored verbatim (no content transformation); `rsync -a` preserves symlinks, permissions, and timestamps. Run from the repo root on the source machine:
+
+```bash
+# /opt/llm — confs, chat templates, Containerfiles, build helpers
+sudo rsync -a /opt/llm/ root/opt/llm/
+
+# systemd user units of the llm user
+sudo mkdir -p root/var/lib/llm/.config/systemd/user
+sudo rsync -a \
+  /var/lib/llm/.config/systemd/user/llama-server.service \
+  /var/lib/llm/.config/systemd/user/ik_llama@.service \
+  /var/lib/llm/.config/systemd/user/vllm@.container \
+  root/var/lib/llm/.config/systemd/user/
+
+# /etc/conf.d symlinks (relative, so the tree is relocatable)
+sudo mkdir -p root/etc/conf.d
+sudo ln -sfn ../../opt/llm/llama/conf root/etc/conf.d/llama
+sudo ln -sfn ../../opt/llm/vllm/conf  root/etc/conf.d/vllm
+```
+
+### Deploying to (re)create the setup on a server
+
+```bash
+sudo rsync -a root/. /
+sudo -u llm systemctl --user daemon-reload
+```
+
+The `llm` user, model weights (`/var/lib/llm/models`), and the `codeberg.org/k153/vllm-openai-custom` image (build with `root/opt/llm/vllm/Containerfile`) must exist on the target beforehand.
 
 ## License
 

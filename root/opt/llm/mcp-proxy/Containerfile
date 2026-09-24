@@ -1,0 +1,17 @@
+FROM ghcr.io/tbxark/mcp-proxy:latest
+
+# System deps
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends git ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+
+# Playwright
+RUN npx playwright install-deps chromium \
+  && npx playwright install chromium
+
+# https://github.com/chrisrobison/textweb
+RUN npm install -g textweb@0.2.5
+
+ENTRYPOINT ["/main"]
+CMD ["--config", "/config/config.json"]FROM ghcr.io/tbxark/mcp-proxy:latest
+

@@ -57,7 +57,7 @@ root/
 │   ├── llama -> ../../opt/llm/llama/conf
 │   └── vllm  -> ../../opt/llm/vllm/conf
 ├── opt/llm/
-│   ├── bin/                                 # vllm-build-cmd
+│   ├── bin/                                 # llama.cpp / vLLM wrapper scripts
 │   ├── chat-templates/                      # .jinja chat templates
 │   ├── llama/conf/                          # llama-server env files
 │   ├── mcp-proxy/Containerfile

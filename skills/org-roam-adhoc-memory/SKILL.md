@@ -1,7 +1,7 @@
 ---
 name: org-roam-adhoc-memory
 description: Query and modify the org-roam knowledge base. Use for searching notes, retrieving content, exploring links, traversing the graph, creating notes, or appending journal entries. All operations use bash scripts — never construct elisp manually.
-compatibility: Requires bash, jq, and emacsclient with org-roam. Needs the org-roam-memory Emacs extension and its config.json.
+compatibility: Requires bash, jq, and a running emacsclient with org-roam. The scripts load the Elisp library from the pi agent extensions directory and read config from ar-llm/org-roam-adhoc-memory.json.
 ---
 
 # Org-Roam Adhoc Memory
@@ -12,7 +12,7 @@ Query and modify your org-roam zettelkasten via dedicated bash scripts.
 All scripts return JSON on stdout. Errors return JSON on stderr with exit code 1.
 Pipe to `jq .` for readable output.
 
-Scripts live at: `~/.agents/skills/org-roam-adhoc-memory/scripts/`
+Scripts live at: `$PI_CODING_AGENT_DIR/skills/org-roam-adhoc-memory/scripts/` (default `~/.config/pi/agent/skills/org-roam-adhoc-memory/scripts/`).
 
 ## Search
 
@@ -61,13 +61,45 @@ scripts/create.sh "Title" "Content" [--file PATH] [--tags TAG1 TAG2]
 
 Auto-picks file path if `--file` omitted. Auto-encrypts to `.org.gpg`.
 
+## Add Child Heading
+
+```bash
+scripts/add-child.sh TARGET PARENT_TITLE CHILD_TITLE CONTENT [--tags TAG1 TAG2]
+```
+
+Inserts a new heading under an existing heading, in that heading's own file.
+Use this to nest content under a node, or under a heading that has no ID.
+
+- `TARGET` is a node ID or a node file path (relative to the roam directory).
+- `PARENT_TITLE` is the exact headline title to nest under. Use `""` to add a
+  top-level heading at the end of the file.
+- The new heading gets its own ID and the level below the parent.
+- The file is encrypted when it ends in `.org.gpg`.
+- Use `-` for list items in `CONTENT`. Lines that start with `*` are rejected.
+
+```bash
+scripts/add-child.sh comcast.org.gpg "People" "Pradeep George" "Comcast colleague."
+```
+
+This is the general form of adding a heading. `create.sh` only makes files or
+appends top-level headings; use `add-child.sh` to edit an existing node.
+
 ## Append Journal
 
 ```bash
-scripts/append-journal.sh "Content" [YYYY-MM-DD]
+scripts/append-journal.sh TITLE CONTENT [--date YYYY-MM-DD]
 ```
 
-Date defaults to today.
+Date defaults to today. The file `<journal-dir>/YYYY-MM-DD.org.gpg` is an
+org-roam node, not an org-roam daily. This command:
+
+- creates the file with a file-level `:ID:` and a `* YYYY-MM-DD` title when missing
+- repairs a file that has no top-level title
+- appends `** HH:MM TITLE` followed by `CONTENT` as a level-2 section
+- encrypts, because the file ends in `.org.gpg`
+
+Use `-` for list items inside `CONTENT`. Lines that start with `*` are
+rejected, because in Org they create headings and break the file structure.
 
 ## List Nodes
 
@@ -99,24 +131,24 @@ Set `ORG_ROAM_PI_MEMORY_DEBUG=true` to log all activity (input, emacs output, er
 ORG_ROAM_PI_MEMORY_DEBUG=true scripts/search.sh "test"
 ```
 
-Log file paths are configured in `config.json` under the `debug` key. Paths support `~` expansion.
+Log file paths are configured in `ar-llm/org-roam-adhoc-memory.json` under the `debug` key. Paths support `~` expansion.
 
 ## Config
 
-All settings in `$PI_CODING_AGENT_DIR/org-roam-memory/config.json` (default `~/.config/pi/agent/org-roam-memory/config.json`). Example debug config using a temp directory:
+All settings in `$PI_CODING_AGENT_DIR/ar-llm/org-roam-adhoc-memory.json` (default `~/.config/pi/agent/ar-llm/org-roam-adhoc-memory.json`). Example debug config using a temp directory:
 
 ```json
 {
   "debug": {
-    "log-file": "/tmp/org-roam-pi-memory-debug.log",
-    "context-file": "/tmp/org-roam-pi-memory-context.log"
+    "log-file": "/tmp/org-roam-adhoc-memory-debug.log",
+    "context-file": "/tmp/org-roam-adhoc-memory-context.log"
   }
 }
 ```
 
 Use any writable temp directory, for example `/tmp` or `~/tmp`.
 
-- `log-file`: Debug log for skill scripts, TypeScript extension, and Elisp library
-- `context-file`: Separate log for full memory context output (avoids cluttering debug logs)
+- `log-file`: Debug log for the skill scripts and the Elisp library
+- `context-file`: Separate log for the full memory context output
 
-Both Node.js (`expandTilde`) and Elisp (`expand-file-name`) expand `~` to `$HOME`.
+The Elisp library expands `~` with `expand-file-name`.

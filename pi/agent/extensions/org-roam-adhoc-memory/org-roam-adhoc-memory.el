@@ -1,4 +1,4 @@
-;;; org-roam-pi.el --- Pure Elisp API for pi's org-roam memory extension -*- lexical-binding: t; -*-
+;;; org-roam-adhoc-memory.el --- Pure Elisp API for pi's org-roam adhoc memory skill -*- lexical-binding: t; -*-
 
 ;;; Commentary:
 
@@ -18,7 +18,7 @@
 (require 'epa-file)
 
 ;;;; Debug Logging
-;; Set env var ORG_ROAM_PI_MEMORY_DEBUG=true to log to /tmp/org-roam-pi-memory-debug.log
+;; Set env var ORG_ROAM_PI_MEMORY_DEBUG=true to log to /tmp/org-roam-adhoc-memory-debug.log
 (defvar org-roam-pi--debug-log nil
   "Path to debug log file (set at runtime).")
 (defvar org-roam-pi--context-log nil
@@ -32,9 +32,9 @@
 (defun org-roam-pi--init-logs ()
   "Initialize log file paths using `make-temp-file'."
   (unless org-roam-pi--debug-log
-    (setq org-roam-pi--debug-log (make-temp-file "org-roam-pi-memory-debug-" nil ".log")))
+    (setq org-roam-pi--debug-log (make-temp-file "org-roam-adhoc-memory-debug-" nil ".log")))
   (unless org-roam-pi--context-log
-    (setq org-roam-pi--context-log (make-temp-file "org-roam-pi-memory-context-" nil ".log"))))
+    (setq org-roam-pi--context-log (make-temp-file "org-roam-adhoc-memory-context-" nil ".log"))))
 
 (defun org-roam-pi--dbg (msg)
   "Log MSG to debug file if ORG_ROAM_PI_MEMORY_DEBUG is set."
@@ -573,9 +573,8 @@ Returns t on success, error string on failure."
 ;;;; Generate UUID for org IDs
 
 (defun org-roam-pi--generate-id ()
-  "Generate a 32-char uppercase hex ID suitable for org-roam."
-  (let ((uuid (replace-regexp-in-string "-" "" (uuid-generate))))
-    (upcase uuid)))
+  "Generate an org-id compatible UUID for org-roam nodes."
+  (org-id-uuid))
 
 ;;;; Pick file for title (keyword matching)
 
@@ -800,6 +799,14 @@ Returns a JSON string."
         (org-roam-pi--json (nreverse results))))))
 
 ;;;###autoload
+(defun org-roam-pi--body-error (content)
+  "Return an error string when CONTENT contains an org heading, else nil.
+Org headings start with `*' at the beginning of a line.  Use `-' for list
+items instead."
+  (when (seq-some (lambda (line) (string-prefix-p "*" line))
+                  (split-string content "\n"))
+    "Body must not contain lines that start with '*'. Use '-' for list items."))
+
 (defun org-roam-pi-create (title content &optional file tags)
   "Create a new note in org-roam.
 TITLE is the node title, CONTENT is the body text.
@@ -807,73 +814,162 @@ FILE is an optional target path (auto-picked if omitted).
 TAGS is an optional list of tag strings.
 Returns a JSON string."
   (org-roam-pi--bootstrap)
-  (let* ((target-file file)
-  (org-roam-pi--dbg (format "create title=%s" title))
-         (roam-dir org-roam-pi-directory))
-    ;; Auto-pick file if not specified
-    (if (not target-file)
-        (setq target-file (org-roam-pi--pick-file-for-title title)))
-    (if (not target-file)
-      (let ((safe-name (replace-regexp-in-string "[^a-z0-9]+" "-"
-                                     (replace-regexp-in-string "^-\\|-$" ""
-                                                               (downcase title)))))
-        (setq target-file (expand-file-name (format "%s.org.gpg" safe-name) roam-dir))))
+  (let ((body-error (org-roam-pi--body-error content)))
+    (if body-error
+        (org-roam-pi--error body-error)
+      (let* ((target-file file)
+             (roam-dir org-roam-pi-directory))
+        (org-roam-pi--dbg (format "create title=%s" title))
+        (if (not target-file)
+            (setq target-file (org-roam-pi--pick-file-for-title title)))
+        (if (not target-file)
+            (let ((safe-name (replace-regexp-in-string "[^a-z0-9]+" "-"
+                                                       (replace-regexp-in-string "^-\\|-$" ""
+                                                                                 (downcase title)))))
+              (setq target-file (expand-file-name (format "%s.org.gpg" safe-name) roam-dir))))
+        (if (not (file-name-absolute-p target-file))
+            (setq target-file (expand-file-name target-file roam-dir)))
+        (let* ((org-id (org-roam-pi--generate-id))
+               (tag-line (when tags (format ":ROAM_REFS: %s\n" (mapconcat #'identity tags " "))))
+               (headline (format "* %s\n:PROPERTIES:\n:ID:       %s\n%s:END:\n\n%s\n"
+                                 title org-id (or tag-line "") content))
+               (existing-content ""))
+          (when (file-exists-p target-file)
+            (let ((existing (org-roam-pi--read-file target-file)))
+              (when existing (setq existing-content existing))))
+          (let ((combined (concat existing-content "\n" headline "\n")))
+            (if (string-suffix-p ".gpg" target-file)
+                (let ((result (org-roam-pi--encrypt-and-save combined target-file org-roam-pi-gpg-encrypt-to)))
+                  (if (stringp result)
+                      (org-roam-pi--error result)
+                    (org-roam-pi--json `((status . "created")
+                                          (title . ,title)
+                                          (id . ,org-id)
+                                          (file . ,(file-relative-name target-file roam-dir))))))
+              (with-temp-buffer
+                (insert combined)
+                (write-region (point-min) (point-max) target-file nil 'nomesg))
+              (org-roam-pi--json `((status . "created")
+                                    (title . ,title)
+                                    (id . ,org-id)
+                                    (file . ,(file-relative-name target-file roam-dir)))))))))))
 
-    ;; Ensure absolute path
-    (if (not (file-name-absolute-p target-file))
-        (setq target-file (expand-file-name target-file roam-dir)))
-
-    (let* ((org-id (org-roam-pi--generate-id))
-           (tag-line (when tags (format ":ROAM_REFS: %s\n" (mapconcat #'identity tags " "))))
-           (headline (format "* %s\n:PROPERTIES:\n:ID:       %s\n%s:END:\n\n%s\n"
-                             title org-id (or tag-line "") content))
-           (existing-content ""))
-      ;; Read existing content if file exists
-      (when (file-exists-p target-file)
-        (let ((existing (org-roam-pi--read-file target-file)))
-          (when existing (setq existing-content existing))))
-
-      (let ((combined (concat existing-content "\n" headline "\n")))
-        ;; Encrypt and save if .gpg
-        (if (string-suffix-p ".gpg" target-file)
-            (let ((result (org-roam-pi--encrypt-and-save combined target-file org-roam-pi-gpg-encrypt-to)))
-              (if (stringp result)
-                  (org-roam-pi--error result)
-                (org-roam-pi--json `((status . "created")
-                                      (title . ,title)
-                                      (id . ,org-id)
-                                      (file . ,(file-relative-name target-file roam-dir)))))
-          ;; Plain text save
-          (with-temp-buffer
-            (insert combined)
-            (write-region (point-min) (point-max) target-file nil 'nomesg))
-          (org-roam-pi--json `((status . "created")
-                                (title . ,title)
-                                (id . ,org-id)
-                                (file . ,(file-relative-name target-file roam-dir))))))))))
+(defun org-roam-pi--journal-head (date-str)
+  "Return an org-roam file head for a journal note dated DATE-STR."
+  (format ":PROPERTIES:\n:ID:       %s\n:END:\n* %s\n"
+          (org-roam-pi--generate-id) date-str))
 
 ;;;###autoload
-(defun org-roam-pi-append-journal (content &optional date)
-  "Append CONTENT to the journal for DATE (YYYY-MM-DD, defaults to today).
+(defun org-roam-pi-append-journal (title content &optional date)
+  "Append a journal entry to the org-roam note for DATE (YYYY-MM-DD).
+TITLE becomes the entry heading and CONTENT its body.  The note is a
+zettelkasten node: it has a file-level ID and a top-level date title.
 Returns a JSON string."
   (org-roam-pi--bootstrap)
-  (let* ((date-str (or date (format-time-string "%Y-%m-%d")))
-         (journal-dir (expand-file-name org-roam-pi-journal-directory org-roam-pi-directory))
-  (org-roam-pi--dbg (format "append-journal date=%s" (or date "today")))
-         (target-file (expand-file-name (format "%s.org.gpg" date-str) journal-dir))
-         (timestamp (format-time-string "%Y-%m-%d %H:%M"))
-         (headline (format "** %s - Journal Entry\n%s\n" timestamp content)))
-    (if (not (file-directory-p journal-dir))
-        (make-directory journal-dir t))
+  (let ((body-error (org-roam-pi--body-error content)))
+    (if body-error
+        (org-roam-pi--error body-error)
+      (let* ((date-str (or date (format-time-string "%Y-%m-%d")))
+             (journal-dir (expand-file-name org-roam-pi-journal-directory org-roam-pi-directory))
+             (target-file (expand-file-name (format "%s.org.gpg" date-str) journal-dir))
+             (time-str (format-time-string "%H:%M")))
+        (org-roam-pi--dbg (format "append-journal date=%s" date-str))
+        (if (not (file-directory-p journal-dir))
+            (make-directory journal-dir t))
+        (let* ((existing (org-roam-pi--read-file target-file))
+               (base (cond ((not existing)
+                            (org-roam-pi--journal-head date-str))
+                           ((not (string-match-p "^\\* " existing))
+                            (concat (org-roam-pi--journal-head date-str) "\n" existing))
+                           (t existing)))
+               (entry (if (string= (string-trim content) "")
+                          (format "** %s %s" time-str title)
+                        (format "** %s %s\n%s" time-str title content)))
+               (combined (concat (string-trim-right base) "\n\n" entry "\n"))
+               (result (org-roam-pi--save-content combined target-file)))
+          (if (stringp result)
+              (org-roam-pi--error result)
+            (org-roam-pi--json `((status . "appended")
+                                  (date . ,date-str)
+                                  (file . ,(file-relative-name target-file org-roam-pi-directory))))))))))
 
-    (let* ((existing-content (org-roam-pi--read-file target-file))
-           (combined (concat (or existing-content "") headline "\n"))
-           (result (org-roam-pi--encrypt-and-save combined target-file org-roam-pi-gpg-encrypt-to)))
-      (if (stringp result)
-          (org-roam-pi--error result)
-        (org-roam-pi--json `((status . "appended")
-                              (date . ,date-str)
-                              (file . ,(file-relative-name target-file org-roam-pi-directory))))))))
+;;;; Edit an existing node file
+
+(defun org-roam-pi--save-content (content target-file)
+  "Write CONTENT to TARGET-FILE, encrypting when it ends in .gpg.
+Return nil on success or an error string on failure."
+  (if (string-suffix-p ".gpg" target-file)
+      (org-roam-pi--encrypt-and-save content target-file org-roam-pi-gpg-encrypt-to)
+    (with-temp-buffer
+      (insert content)
+      (write-region (point-min) (point-max) target-file nil 'nomesg)
+      nil)))
+
+(defun org-roam-pi--headline-subtree (content title)
+  "Return (LEVEL . OFFSET) for the first headline titled TITLE in CONTENT.
+OFFSET is a 0-based index into CONTENT marking the end of the subtree.
+Return nil when no headline has that title."
+  (with-temp-buffer
+    (insert content)
+    (org-mode)
+    (let ((hit (org-element-map (org-element-parse-buffer) 'headline
+                 (lambda (h)
+                   (when (string= (org-element-property :raw-value h) title) h))
+                 nil t)))
+      (when hit
+        (cons (org-element-property :level hit)
+              (1- (org-element-property :end hit)))))))
+
+(defun org-roam-pi-add-child (target parent-title child-title content &optional tags)
+  "Insert a new child headline under PARENT-TITLE in TARGET.
+TARGET is a node ID or a node file path (relative to the roam directory).
+PARENT-TITLE is the exact title of the headline to nest under.  When it is
+empty, insert a top-level headline at the end of the file.
+CHILD-TITLE is the new headline title and CONTENT is its body.
+TAGS is an optional list of tag strings.  Returns a JSON string."
+  (org-roam-pi--bootstrap)
+  (let ((body-error (org-roam-pi--body-error content)))
+    (if body-error
+        (org-roam-pi--error body-error)
+      (let* ((node (org-roam-pi--node-from-id target))
+             (file (cond (node (org-roam-pi--node-file node))
+                         ((file-name-absolute-p target) target)
+                         (t (expand-file-name target org-roam-pi-directory))))
+             (child-id (org-roam-pi--generate-id))
+             (tag-line (when tags (format ":ROAM_REFS: %s\n" (mapconcat #'identity tags " ")))))
+        (org-roam-pi--dbg (format "add-child target=%s parent=%s" target parent-title))
+        (if (not (file-exists-p file))
+            (org-roam-pi--error (format "Target not found: %s" target))
+          (let* ((existing (or (org-roam-pi--read-file file) ""))
+                 (top-level (or (null parent-title) (string= parent-title "")))
+                 (bounds (unless top-level
+                           (org-roam-pi--headline-subtree existing parent-title))))
+            (if (and (not top-level) (not bounds))
+                (org-roam-pi--error (format "Headline not found: %s" parent-title))
+              (let* ((level (if bounds (car bounds) 0))
+                     (headline (format "%s %s\n:PROPERTIES:\n:ID:       %s\n%s:END:\n\n%s"
+                                       (make-string (1+ level) ?*)
+                                       child-title child-id (or tag-line "") content))
+                     (new-content
+                      (if bounds
+                          (let ((end (cdr bounds)))
+                            (concat (string-trim-right (substring existing 0 end))
+                                    "\n\n"
+                                    headline
+                                    "\n\n"
+                                    (string-trim-left (substring existing end))))
+                        (concat (string-trim-right existing)
+                                "\n\n"
+                                headline
+                                "\n")))
+                     (result (org-roam-pi--save-content new-content file)))
+                (if (stringp result)
+                    (org-roam-pi--error result)
+                  (org-roam-pi--json `((status . "added")
+                                        (parent . ,(or parent-title ""))
+                                        (title . ,child-title)
+                                        (id . ,child-id)
+                                        (file . ,(file-relative-name file org-roam-pi-directory)))))))))))))
 
 (defun org-roam-pi--build-entry-neighborhood ()
   "Build entry node neighborhood section.
@@ -1013,7 +1109,7 @@ Returns a string of markdown text."
                                                            (string-trim p)))
                                                     (split-string content "\n\n"))))
                         (dolist (p (seq-take paragraphs 3))
-                          (push (substring (string-trim p) 0 200) lines))))
+                          (push (substring (string-trim p) 0 (min 200 (length (string-trim p)))) lines))))
                     (push (mapconcat #'identity (nreverse lines) "\n") sections))
                 ;; Older: child headlines only — parse file for sub-headlines
                 (let* ((children (seq-filter (lambda (n)
@@ -1127,5 +1223,5 @@ Returns a JSON string."
       (push (org-roam-pi--node-to-map node org-roam-pi-directory) results))
     (org-roam-pi--json (nreverse results))))
 
-(provide 'org-roam-pi-memory)
-;;; org-roam-pi-memory.el ends here
+(provide 'org-roam-adhoc-memory)
+;;; org-roam-adhoc-memory.el ends here

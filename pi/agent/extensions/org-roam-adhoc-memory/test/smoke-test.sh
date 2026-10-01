@@ -4,8 +4,9 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 EXT_DIR="$SCRIPT_DIR/.."
-CONFIG_FILE="${PI_CODING_AGENT_DIR:-$HOME/.config/pi/agent}/org-roam-memory/config.json"
-SKILL_DIR="$HOME/.agents/skills/org-roam-adhoc-memory/scripts"
+AGENT_DIR="${PI_CODING_AGENT_DIR:-$HOME/.config/pi/agent}"
+CONFIG_FILE="$AGENT_DIR/ar-llm/org-roam-adhoc-memory.json"
+SKILL_DIR="$AGENT_DIR/skills/org-roam-adhoc-memory/scripts"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -32,24 +33,39 @@ test_case() {
   fi
 }
 
+add_child_case() {
+  local f=/tmp/org-roam-addchild-test.org
+  printf '* Parent\n:PROPERTIES:\n:ID:      22222222222222222222222222222222\n:END:\n\nbody\n' > "$f"
+  local status
+  status=$("$SKILL_DIR/add-child.sh" "$f" Parent Child childbody 2>/dev/null | jq -r '.status')
+  local count
+  count=$(grep -c '^\*\* Child' "$f")
+  rm -f "$f"
+  echo "$status/$count"
+}
+
+heading_guard_case() {
+  "$SKILL_DIR/append-journal.sh" 'Guard test' '* not a heading' 2>/dev/null | jq -r '.error'
+}
+
 echo "=== Org-Roam Memory Smoke Tests ==="
 echo "Config: $CONFIG_FILE"
 echo ""
 
-# ─── Extension Tests ──────────────────────────────────────────────────
-echo "--- Extension Tests ---"
+# ─── Library Tests ────────────────────────────────────────────────────
+echo "--- Library Tests ---"
 
 test_case "Config file exists" \
   "ls '$CONFIG_FILE'" \
-  "config.json"
+  "org-roam-adhoc-memory.json"
 
-test_case "Extension index.ts exists" \
-  "ls '$EXT_DIR/index.ts'" \
-  "index.ts"
+test_case "Elisp declares expected feature" \
+  "grep -c \"(provide 'org-roam-adhoc-memory)\" '$EXT_DIR/org-roam-adhoc-memory.el'" \
+  "^1$"
 
 test_case "Elisp library exists" \
-  "ls '$EXT_DIR/org-roam-pi-memory.el'" \
-  "org-roam-pi-memory.el"
+  "ls '$EXT_DIR/org-roam-adhoc-memory.el'" \
+  "org-roam-adhoc-memory.el"
 
 # ─── Skill Script Tests ────────────────────────────────────────────────
 echo ""
@@ -76,10 +92,20 @@ test_case "graph returns results" \
   "true"
 
 test_case "append-journal creates entry" \
-  "$SKILL_DIR/append-journal.sh 'Smoke test $(date +%Y-%m-%d)' 2>/dev/null | jq '.status == \"appended\"'" \
+  "$SKILL_DIR/append-journal.sh 'Smoke test' 'Smoke test $(date +%Y-%m-%d)' 2>/dev/null | jq '.status == \"appended\"'" \
   "true"
 
-# NOTE: create node skipped - requires uuid-generate elisp library
+test_case "append-journal rejects heading content" \
+  "heading_guard_case" \
+  "must not contain"
+
+test_case "create node writes JSON status" \
+  "TMP_NODE=$(mktemp /tmp/org-roam-smoke-XXXXXX.org); $SKILL_DIR/create.sh 'Smoke Test Node' 'body' --file \$TMP_NODE 2>/dev/null | jq -r '.status'; rm -f \$TMP_NODE" \
+  "created"
+
+test_case "add-child nests heading under parent" \
+  "add_child_case" \
+  "^added/1$"
 
 # ─── Debug Logging Tests ───────────────────────────────────────────────
 echo ""
@@ -97,9 +123,9 @@ test_case "Context log path exists in config" \
 echo ""
 echo "--- Error Handling Tests ---"
 
-test_case "Search with no results returns error" \
+test_case "Search with no results returns empty array" \
   "$SKILL_DIR/search.sh nonexistentxyz123 2>&1" \
-  "error"
+  "^\[\]$"
 
 test_case "Retrieve invalid ID returns error" \
   "$SKILL_DIR/retrieve.sh --id invalid-uuid 2>&1" \

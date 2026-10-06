@@ -2,7 +2,7 @@
 
 [![npm](https://img.shields.io/npm/v/@ar-llm/pi-custom-compaction)](https://www.npmjs.com/package/@ar-llm/pi-custom-compaction) [![Unlicense](https://img.shields.io/badge/license-Unlicense-blue.svg)](./LICENSE)
 
-Pi extension that replaces default compaction with a full LLM-generated summary. Supports **provider-aware configuration** so different session providers can use different compaction models, request params, and prompts.
+Pi extension that replaces default compaction with a full LLM-generated summary. Supports **provider-aware configuration** so different session providers can use different compaction models, request params, and prompts. It can also **chunk** the transcript with map-reduce summarization, so a small-context model can compact a long conversation.
 
 Uses `ctx.modelRegistry.runtime.complete()` (the coding-agent's internal ModelRuntime) instead of the deprecated `@earendil-works/pi-ai/compat` `complete()`, so that custom providers (e.g. github-copilot) are properly routed and auth is resolved internally.
 
@@ -56,14 +56,32 @@ Create the config file at `~/.config/pi/agent/ar-llm/custom-compaction.json`:
     },
     "alba-local": {
       "model": "Qwen3.6-27B",
+      "max-output-tokens": 4096,
       "stream-options": {
-        "maxTokens": 32758,
         "temperature": 0.6
       },
       "request-params": {
         "chat_template_kwargs": {
           "enable_thinking": false
         }
+      }
+    },
+    "llama.cpp": {
+      "model": "LFM2.5-VL-3B",
+      "max-output-tokens": 4096,
+      "stream-options": {
+        "temperature": 0.5
+      },
+      "request-params": {
+        "chat_template_kwargs": {
+          "enable_thinking": false
+        }
+      },
+      "chunking": {
+        "context-window": 32768,
+        "safety-tokens": 512,
+        "overlap-messages": 0,
+        "max-depth": 4
       }
     },
     "anthropic": {
@@ -86,6 +104,8 @@ Create the config file at `~/.config/pi/agent/ar-llm/custom-compaction.json`:
 |-------|------|-------------|
 | `enabled` | `boolean` | Set to `false` to silently skip compaction for this provider. |
 | `model` | `string` | Model ID to use for compaction (looked up within the session's provider catalog). Required unless `enabled: false`. |
+| `max-output-tokens` | `number` | Response ceiling for the summary. Preferred over `stream-options.maxTokens`. |
+| `chunking` | `object` | Enable map-reduce summarization. See [Chunking](#chunking). |
 | `stream-options` | `object` | pi `StreamOptions` fields. Merged over the built-in defaults. |
 | `request-params` | `object` | Raw provider request-body parameters. Forwarded as `StreamOptions.samplingParams`. |
 | `prompt` | `object` | Provider-specific prompt that overrides `default-prompts`. |
@@ -102,7 +122,7 @@ Built-in defaults, overridable from `stream-options`:
 
 | Field | Default | Description |
 |-------|---------|-------------|
-| `maxTokens` | `8192` | Response ceiling for the summary. |
+| `maxTokens` | `8192` | Deprecated alias for `max-output-tokens`. Use the provider-level field. |
 | `temperature` | provider default | Sampling temperature. Also accepted in `request-params`. |
 | `cacheRetention` | `"none"` | Prompt cache retention. |
 | `thinkingEnabled` | `false` | Thinking blocks. Only some APIs read this field. |
@@ -123,6 +143,33 @@ and Google honour it as well. When both keys are set, `request-params` wins.
 
 > `maxTokens` is a pi parameter. It does not belong in `request-params`.
 
+### Chunking
+
+A compaction model with a small context cannot read a large transcript in one
+request. The `chunking` block turns on map-reduce summarization:
+
+1. **Map.** Split the transcript at message boundaries into batches that fit the
+   model, then summarize each batch.
+2. **Reduce.** Merge the partial summaries, in layers if needed, until one
+   summary remains.
+3. **Final merge.** Merge the result with `previousSummary`, when it fits.
+
+Absent the block, the extension keeps the single-shot behavior. When the block
+is present but the transcript already fits, it still uses one call.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `context-window` | `number` | required | The model's true usable context per request. Overrides the model metadata, which can lie. |
+| `safety-tokens` | `number` | `512` | Headroom for estimator error. |
+| `overlap-messages` | `number` | `0` | Messages repeated from the tail of one chunk at the start of the next. |
+| `max-depth` | `number` | `4` | Maximum reduce layers before the extension falls back. |
+| `chunking-prompt` | `object` | built-in | Prompt for the merge step. Same shape as `prompt`. |
+
+The response ceiling and the prompt scaffolding are subtracted from
+`context-window` before the extension splits. A single message larger than the
+budget is truncated head-and-tail. A `max-output-tokens` value at or above
+`context-window` is ignored, with the built-in default used instead.
+
 ### Behavior
 
 1. Loads `default-prompts` (or uses built-in defaults)
@@ -139,8 +186,11 @@ The nested `request-params.providers.<name>` shape is no longer supported. Put
 the parameters directly under `request-params`. The extension ignores the old
 wrapper and logs a message.
 
-`maxTokens` is a pi parameter. Put it in `stream-options`. The extension moves a
+`maxTokens` is a pi parameter, not a request parameter. The extension moves a
 legacy `request-params.maxTokens` value into `stream-options` and logs a message.
+
+`stream-options.maxTokens` is deprecated. Rename it to the provider-level
+`max-output-tokens`. Both still work, but the extension logs a warning.
 
 Rename the top-level `defaultPrompt` to `default-prompts`. The old key is
 ignored and the extension logs a message.

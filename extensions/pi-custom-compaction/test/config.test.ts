@@ -56,7 +56,7 @@ describe("loadConfig", () => {
 			providers: {
 				[PROVIDER]: {
 					model: "some-model",
-					"stream-options": { maxTokens: 4096 },
+					"max-output-tokens": 4096,
 					"request-params": { top_p: 0.9 },
 				},
 			},
@@ -69,6 +69,7 @@ describe("loadConfig", () => {
 		assert.equal(config.compactionModelId, "some-model");
 		assert.deepEqual(config.streamOptions, { maxTokens: 4096 });
 		assert.deepEqual(config.requestParams, { top_p: 0.9 });
+		assert.equal(config.chunking, null);
 	});
 
 	it("returns empty param objects when the provider sets none", () => {
@@ -283,6 +284,117 @@ describe("loadConfig", () => {
 			assert.ok(config);
 			assert.match(errors.join("\n"), /"defaultPrompt".*Rename it to "default-prompts"/);
 			assert.match(config.prompt.system, /conversation summarizer/);
+		});
+	});
+
+	describe("max-output-tokens", () => {
+		it("wins over stream-options.maxTokens and warns", () => {
+			const errors = captureErrors();
+			writeTmpConfig({
+				providers: {
+					[PROVIDER]: {
+						model: "m",
+						"max-output-tokens": 4096,
+						"stream-options": { maxTokens: 8192 },
+					},
+				},
+			});
+
+			const config = loadConfig(PROVIDER);
+
+			assert.ok(config);
+			assert.equal(config.streamOptions.maxTokens, 4096);
+			assert.match(errors.join("\n"), /max-output-tokens.*wins/i);
+		});
+
+		it("warns when only stream-options.maxTokens is set", () => {
+			const errors = captureErrors();
+			writeTmpConfig({
+				providers: { [PROVIDER]: { model: "m", "stream-options": { maxTokens: 4096 } } },
+			});
+
+			const config = loadConfig(PROVIDER);
+
+			assert.ok(config);
+			assert.equal(config.streamOptions.maxTokens, 4096);
+			assert.match(errors.join("\n"), /stream-options\.maxTokens.*deprecated/);
+		});
+
+		it("ignores an invalid value and warns", () => {
+			const errors = captureErrors();
+			writeTmpConfig({
+				providers: { [PROVIDER]: { model: "m", "max-output-tokens": 0 } },
+			});
+
+			const config = loadConfig(PROVIDER);
+
+			assert.ok(config);
+			assert.equal(config.streamOptions.maxTokens, undefined);
+			assert.match(errors.join("\n"), /invalid "max-output-tokens"/);
+		});
+	});
+
+	describe("chunking", () => {
+		it("is disabled when absent", () => {
+			writeTmpConfig({ providers: { [PROVIDER]: { model: "m" } } });
+
+			assert.equal(loadConfig(PROVIDER)?.chunking, null);
+		});
+
+		it("applies defaults", () => {
+			writeTmpConfig({
+				providers: {
+					[PROVIDER]: { model: "m", chunking: { "context-window": 32768 } },
+				},
+			});
+
+			const config = loadConfig(PROVIDER);
+			assert.ok(config);
+			const chunking = config.chunking;
+			assert.ok(chunking);
+			assert.equal(chunking.contextWindow, 32768);
+			assert.equal(chunking.safetyTokens, 512);
+			assert.equal(chunking.overlapMessages, 0);
+			assert.equal(chunking.maxDepth, 4);
+			assert.match(chunking.chunkingPrompt.system, /partial summaries/);
+		});
+
+		it("accepts overrides and a custom chunking prompt", () => {
+			const chunkingPrompt = { system: "s", user: "u", includePreviousSummary: false };
+			writeTmpConfig({
+				providers: {
+					[PROVIDER]: {
+						model: "m",
+						chunking: {
+							"context-window": 32768,
+							"safety-tokens": 1024,
+							"overlap-messages": 2,
+							"max-depth": 6,
+							"chunking-prompt": chunkingPrompt,
+						},
+					},
+				},
+			});
+
+			const config = loadConfig(PROVIDER);
+			assert.ok(config);
+			const chunking = config.chunking;
+			assert.ok(chunking);
+			assert.equal(chunking.safetyTokens, 1024);
+			assert.equal(chunking.overlapMessages, 2);
+			assert.equal(chunking.maxDepth, 6);
+			assert.deepEqual(chunking.chunkingPrompt, chunkingPrompt);
+		});
+
+		it("disables chunking when context-window is missing and warns", () => {
+			const errors = captureErrors();
+			writeTmpConfig({ providers: { [PROVIDER]: { model: "m", chunking: {} } } });
+
+			const config = loadConfig(PROVIDER);
+
+			assert.ok(config);
+			assert.equal(config.chunking, null);
+			assert.match(errors.join("\n"), /chunking\.context-window/);
 		});
 	});
 });

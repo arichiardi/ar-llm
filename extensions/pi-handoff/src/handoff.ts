@@ -53,6 +53,26 @@
  *     "system-prompt": "Custom summarization prompt..."
  *   }
  *
+ * llama.cpp serves the OpenAI completions API, so its compat flags differ
+ * (forceAdaptiveThinking does not apply to it):
+ *
+ *   {
+ *     "provider": {
+ *       "llama.cpp": {
+ *         "Qwen3.8-27B": {
+ *           "compat": {
+ *             "supportsStore": false,
+ *             "supportsDeveloperRole": false,
+ *             "supportsReasoningEffort": false,
+ *             "supportsUsageInStreaming": true,
+ *             "supportsStrictMode": false,
+ *             "maxTokensField": "max_tokens"
+ *           }
+ *         }
+ *       }
+ *     }
+ *   }
+ *
  * Debug logging: set PI_HANDOFF_DEBUG=1 to log to $TMPDIR/ar-llm/pi-handoff.log
  */
 

@@ -27,6 +27,7 @@ DEBUG_LOG="${DEBUG_LOG/#\~/$HOME}"
 BOOTSTRAP="(progn
   (add-to-list 'load-path \"$EXT_DIR\")
   (require 'org)
+  (require 'epa-file)
   (load (expand-file-name \"org-roam-adhoc-memory\" (car load-path)) nil t)
   (org-roam-pi-apply-config \"$CONFIG_FILE\"))"
 

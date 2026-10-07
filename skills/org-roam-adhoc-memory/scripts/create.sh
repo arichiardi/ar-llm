@@ -12,7 +12,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --file) FILE="\"$2\""; shift ;;
     --tags)
-      TAGS="("
+      TAGS="'("
       shift
       while [ $# -gt 0 ] && [ "${1:0:2}" != "--" ]; do
         TAGS="$TAGS \"$1\""

@@ -7,7 +7,7 @@
 set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 TARGET="${1:?Usage: add-child.sh TARGET PARENT_TITLE CHILD_TITLE CONTENT [--tags TAG...]}"
-PARENT="${2:?Parent headline title is required}"
+PARENT="${2-}"
 CHILD_TITLE="${3:?Child headline title is required}"
 CONTENT="${4:?Content is required}"
 TAGS="nil"
@@ -15,7 +15,7 @@ shift 4
 while [ $# -gt 0 ]; do
   case "$1" in
     --tags)
-      TAGS="("
+      TAGS="'("
       shift
       while [ $# -gt 0 ] && [ "${1:0:2}" != "--" ]; do
         TAGS="$TAGS \"$1\""

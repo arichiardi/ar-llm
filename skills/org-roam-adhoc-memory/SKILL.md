@@ -84,6 +84,30 @@ scripts/add-child.sh comcast.org.gpg "People" "Pradeep George" "Comcast colleagu
 This is the general form of adding a heading. `create.sh` only makes files or
 appends top-level headings; use `add-child.sh` to edit an existing node.
 
+## Edit Entry
+
+```bash
+scripts/edit-entry.sh TARGET TITLE CONTENT
+```
+
+Replaces the body of an existing heading, in that heading's own file.
+Use this to rewrite an entry that already exists, instead of adding a second
+copy of it.
+
+- `TARGET` is a node ID or a node file path (relative to the roam directory).
+- `TITLE` is the exact headline title to replace the body of.
+- The headline, its property drawer and its ID stay unchanged.
+- Everything between the property drawer and the end of the section is
+  replaced. Subheadings of `TITLE` are preserved.
+- Use `-` for list items in `CONTENT`. Lines that start with `*` are rejected.
+
+```bash
+scripts/edit-entry.sh life.org.gpg "KeePass Password Safe" "KeePass stores all passwords."
+```
+
+The command fails with `Headline not found` when no heading has that title.
+Use `retrieve.sh` first to confirm the title.
+
 ## Append Journal
 
 ```bash

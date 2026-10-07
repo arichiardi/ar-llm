@@ -895,6 +895,71 @@ Returns a JSON string."
 
 ;;;; Edit an existing node file
 
+(defun org-roam-pi--headline-section-region (content title)
+  "Return (BODY-START . SECTION-END) character offsets for headline TITLE.
+BODY-START is the 0-based index of the first character after the headline
+line and its property drawer.  SECTION-END is the 0-based index of the first
+subheading of TITLE, or the end of its subtree when it has no subheading.
+Return nil when no headline has that title."
+  (with-temp-buffer
+    (insert content)
+    (org-mode)
+    (let ((hit (org-element-map (org-element-parse-buffer) 'headline
+                 (lambda (h)
+                   (when (string= (org-element-property :raw-value h) title) h))
+                 nil t)))
+      (when hit
+        (let ((limit (org-element-property :end hit)))
+          (goto-char (org-element-property :begin hit))
+          (forward-line 1)
+          (when (looking-at-p "[ \t]*:PROPERTIES:")
+            (when (re-search-forward "^[ \t]*:END:[ \t]*$" nil t)
+              (forward-line 1)))
+          (skip-chars-forward " \t\n")
+          (let ((body-start (1- (point))))
+            (goto-char (1+ body-start))
+            (cons body-start
+                  (if (re-search-forward "^\\*+ " limit t)
+                      (1- (match-beginning 0))
+                    (1- limit)))))))))
+
+;;;###autoload
+(defun org-roam-pi-edit-entry (target title content)
+  "Replace the body of headline TITLE in TARGET with CONTENT.
+TARGET is a node ID or a node file path (relative to the roam directory).
+TITLE is the exact title of the headline to edit.  CONTENT replaces
+everything between the headline property drawer and the end of its section.
+The headline, its property drawer and its ID stay unchanged.  Subheadings of
+TITLE are preserved.  Returns a JSON string."
+  (org-roam-pi--bootstrap)
+  (let ((body-error (org-roam-pi--body-error content)))
+    (if body-error
+        (org-roam-pi--error body-error)
+      (let* ((node (org-roam-pi--node-from-id target))
+             (file (cond (node (org-roam-pi--node-file node))
+                         ((file-name-absolute-p target) target)
+                         (t (expand-file-name target org-roam-pi-directory)))))
+        (org-roam-pi--dbg (format "edit-entry target=%s title=%s" target title))
+        (if (not (file-exists-p file))
+            (org-roam-pi--error (format "Target not found: %s" target))
+          (let* ((existing (or (org-roam-pi--read-file file) ""))
+                 (bounds (org-roam-pi--headline-section-region existing title)))
+            (if (not bounds)
+                (org-roam-pi--error (format "Headline not found: %s" title))
+              (let* ((prefix (string-trim-right (substring existing 0 (car bounds))))
+                     (suffix (string-trim-left (substring existing (cdr bounds))))
+                     (new-content (concat prefix
+                                          "\n\n"
+                                          (string-trim-right content)
+                                          (if (string= suffix "") "\n" "\n\n")
+                                          suffix))
+                     (result (org-roam-pi--save-content new-content file)))
+                (if (stringp result)
+                    (org-roam-pi--error result)
+                  (org-roam-pi--json `((status . "updated")
+                                        (title . ,title)
+                                        (file . ,(file-relative-name file org-roam-pi-directory)))))))))))))
+
 (defun org-roam-pi--save-content (content target-file)
   "Write CONTENT to TARGET-FILE, encrypting when it ends in .gpg.
 Return nil on success or an error string on failure."

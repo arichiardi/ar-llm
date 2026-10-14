@@ -100,8 +100,8 @@
 (defvar org-roam-pi--node-cache nil
   "Cache of all scanned nodes. Invalidated on each public call.")
 
-(defvar org-roam-pi--link-cache nil
-  "Cache of (source-id . (dest-id ...)) link map. Invalidated on each public call.")
+(defvar org-roam-pi--link-cache (make-hash-table :test 'equal)
+  "Cache of source-id -> (dest-id ...) link map. Invalidated on each public call.")
 
 
 ;;;; Bootstrap
@@ -441,9 +441,42 @@ MAX-CHARS limits output length (default 500)."
                   (when (> (length raw-body) max-len)
                     (setq raw-body (substring raw-body 0 max-len)))
                   raw-body)))))))))
+(defun org-roam-pi--uuid-p (str)
+  "Return the node UUID in STR, or nil.
+STR may carry the `id:' prefix used by `[[id:UUID]]' links."
+  (when (and (stringp str)
+             (string-match
+              "^\\(id:\\)\\{0,1\\}\\([0-9a-fA-F]\\{8\\}-[0-9a-fA-F]\\{4\\}-[0-9a-fA-F]\\{4\\}-[0-9a-fA-F]\\{4\\}-[0-9a-fA-F]\\{12\\}\\)$"
+              str))
+    (match-string 2 str)))
+
+(defun org-roam-pi--index-raw-links (src-id text)
+  "Record SRC-ID to UUID links found in raw org TEXT into the link cache."
+  (when (and src-id text org-roam-pi--link-cache)
+    (let ((re "\\[\\[\\(id:\\)\\{0,1\\}\\([0-9a-fA-F-]+\\)"))
+      (while (string-match re text)
+        (let ((dest (org-roam-pi--uuid-p (match-string 2 text))))
+          (when dest
+            (puthash src-id
+                     (cons dest (gethash src-id org-roam-pi--link-cache '()))
+                     org-roam-pi--link-cache)))
+        (setq text (substring text (match-end 0)))))))
+
+(defun org-roam-pi--index-headline-links (node headline)
+  "Record SRC links from NODE's headline subtree into the link cache."
+  (let ((src-id (org-roam-pi--node-id node)))
+    (when (and src-id org-roam-pi--link-cache)
+      (dolist (link (org-element-map headline 'link #'identity))
+        (let ((dest (org-roam-pi--uuid-p (org-element-property :path link))))
+          (when dest
+            (puthash src-id
+                     (cons dest (gethash src-id org-roam-pi--link-cache '()))
+                     org-roam-pi--link-cache)))))))
+
 (defun org-roam-pi--parse-file-nodes (file-path)
   "Parse FILE-PATH and return list of node alists found in it.
-Includes both headline-level and file-level nodes." 
+Includes both headline-level and file-level nodes.
+Also indexes [[uuid]] links into `org-roam-pi--link-cache'." 
   (let ((content (org-roam-pi--read-file file-path)))
     (if (not content)
         '()
@@ -452,20 +485,29 @@ Includes both headline-level and file-level nodes."
         (org-mode)
         (let* ((tree (org-element-parse-buffer))
                (headlines (org-element-map tree 'headline #'identity))
+               (file-node (org-roam-pi--extract-file-node content file-path))
                (nodes '()))
           ;; File-level node (e.g., work.org.gpg with top-level :ID:)
-          (when-let* ((file-node (org-roam-pi--extract-file-node content file-path)))
-            (push file-node nodes))
-          ;; Headline-level nodes
+          (when file-node
+            (push file-node nodes)
+            ;; File-level links live before the first headline
+            (let ((pre (if headlines
+                           (substring content 0 (org-element-property :begin (car headlines)))
+                         content)))
+              (org-roam-pi--index-raw-links (org-roam-pi--node-id file-node) pre)))
+          ;; Headline-level nodes and their subtree links
           (dolist (hl headlines)
             (let ((node (org-roam-pi--headline-to-node hl file-path)))
               (when node
-                (push node nodes))))
+                (push node nodes)
+                (org-roam-pi--index-headline-links node hl))))
           nodes)))))
 
 (defun org-roam-pi--scan-nodes ()
-  "Build node cache from org-roam DB, falling back to file scanning."
+  "Build node cache from org-roam DB, falling back to file scanning.
+Also resets the link cache; the file scan branch fills it from [[uuid]] links."
   (setq org-roam-pi--node-cache '())
+  (setq org-roam-pi--link-cache (make-hash-table :test 'equal))
   (if-let* ((db-nodes (org-roam-pi--db-node-list)))
       (progn
         (org-roam-pi--dbg (format "scan-nodes: loaded %d nodes from DB" (length db-nodes)))
@@ -506,17 +548,19 @@ Includes both headline-level and file-level nodes."
       (org-roam-pi--db-node-from-title title)))
 
 (defun org-roam-pi--node-outgoing (node-id)
-  "Return list of destination IDs linked FROM NODE-ID."
-  (gethash node-id org-roam-pi--link-cache '()))
+  "Return list of destination IDs linked FROM NODE-ID. Empty list when no cache."
+  (when org-roam-pi--link-cache
+    (gethash node-id org-roam-pi--link-cache '())))
 
 (defun org-roam-pi--node-incoming (node-id)
-  "Return list of source IDs that link TO NODE-ID."
-  (let ((sources '()))
-    (maphash (lambda (src dests)
-               (when (member node-id dests)
-                 (push src sources)))
-             org-roam-pi--link-cache)
-    sources))
+  "Return list of source IDs that link TO NODE-ID. Empty list when no cache."
+  (when org-roam-pi--link-cache
+    (let ((sources '()))
+      (maphash (lambda (src dests)
+                 (when (member node-id dests)
+                   (push src sources)))
+               org-roam-pi--link-cache)
+      sources)))
 
 ;;;; Node-to-map converter (for JSON output)
 

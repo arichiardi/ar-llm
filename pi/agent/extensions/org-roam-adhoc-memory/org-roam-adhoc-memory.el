@@ -178,13 +178,28 @@ Converts nil/empty-list to an empty vector so the output is [] instead of null."
       (replace-regexp-in-string "^\"\|\"$" "" val)
     val))
 
+(defun org-roam-pi--db ()
+  "Return an emacsql handle to the org-roam DB, or nil on error."
+  (ignore-errors (org-roam-db)))
+
+(defun org-roam-pi--db-node-count ()
+  "Return the number of rows in the org-roam nodes table, or 0."
+  (let ((db (org-roam-pi--db)))
+    (when db
+      (let ((rows (ignore-errors
+                    (emacsql db "SELECT COUNT(*) FROM nodes"))))
+        (when rows
+          (car (car rows)))))))
+
 (defun org-roam-pi--db-available-p ()
-  "Return non-nil if org-roam DB can be queried via emacsql."
+  "Return non-nil if the org-roam DB can be queried and contains nodes.
+An empty DB is not usable: org-roam auto-creates an empty file on demand,
+so module loadability alone would select a DB path with no data."
   (ignore-errors
     (and (require 'org-roam-db nil t)
          (fboundp 'org-roam-db-query)
          (fboundp 'emacsql)
-         t)))
+         (> (org-roam-pi--db-node-count) 0))))
 
 (defun org-roam-pi--parse-properties (props-str)
   "Parse PROPS-STR (plist stored in DB) into an alist, stripping quotes."
@@ -750,8 +765,7 @@ Returns a JSON string."
         (let* ((dir (or direction "both"))
                (outgoing '())
                (incoming '())
-               (use-db (and (require 'org-roam-db nil t)
-                            (fboundp 'org-roam-db-query))))
+               (use-db (org-roam-pi--db-available-p)))
           (if use-db
               ;; DB path: query SQLite directly
               (let* ((db (ignore-errors (org-roam-db)))
@@ -820,8 +834,7 @@ Returns a JSON string."
                       results))
                 ;; Get neighbors from DB or cache
                 (when (< cur-hop max-hops)
-                  (let* ((use-db (and (require 'org-roam-db nil t)
-                                      (fboundp 'org-roam-db-query)))
+                  (let* ((use-db (org-roam-pi--db-available-p))
                          (out-neighbors '())
                          (in-neighbors '()))
                     (if use-db
@@ -1109,8 +1122,7 @@ Returns a string of markdown text."
                   (push (format "  %s" line) lines))))
             ;; Connected nodes from DB or cache
             (let* ((entry-id (org-roam-pi--node-id entry-node))
-                   (use-db (and (require 'org-roam-db nil t)
-                                (fboundp 'org-roam-db-query)))
+                   (use-db (org-roam-pi--db-available-p))
                    (outgoing-ids '())
                    (linked-nodes '()))
               (if use-db

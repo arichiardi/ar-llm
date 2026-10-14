@@ -592,9 +592,9 @@ If RELATIVE-DIR is given, make file paths relative to it."
       (level . ,(org-roam-pi--node-level node))
       (todo . ,(or (org-roam-pi--node-todo node) ""))
       (priority . ,(or (org-roam-pi--node-priority node) ""))
-      (tags . ,(or (org-roam-pi--node-tags node) '()))
-      (aliases . ,(or (org-roam-pi--node-aliases node) '()))
-      (refs . ,(or (org-roam-pi--node-refs node) '()))
+      (tags . ,(vconcat (or (org-roam-pi--node-tags node) '())))
+      (aliases . ,(vconcat (or (org-roam-pi--node-aliases node) '())))
+      (refs . ,(vconcat (or (org-roam-pi--node-refs node) '())))
       (properties . ,(or (org-roam-pi--node-properties node) '())))))
 
 ;;;; GPG encryption helper
@@ -800,8 +800,8 @@ Returns a JSON string."
                     (push (org-roam-pi--node-to-map src-node org-roam-pi-directory) incoming))))))
           (org-roam-pi--json `((title . ,(org-roam-pi--node-title node))
                                 (id . ,id)
-                                (outgoing . ,(nreverse outgoing))
-                                (incoming . ,(nreverse incoming)))))))))
+                                (outgoing . ,(vconcat (nreverse outgoing)))
+                                (incoming . ,(vconcat (nreverse incoming))))))))))
 ;;;###autoload
 (defun org-roam-pi-graph (&optional node-id title max-hops)
   "Multi-hop BFS traversal from a seed node.

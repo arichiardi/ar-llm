@@ -12,6 +12,23 @@ Query and modify your org-roam zettelkasten via dedicated bash scripts.
 All scripts return JSON on stdout. Errors return JSON on stderr with exit code 1.
 Pipe to `jq .` for readable output.
 
+## GPG Timeout (MUST)
+
+Decrypting `.org.gpg` files can trigger a gpg passphrase dialog. The user may
+not be at the screen to answer it, so the call blocks indefinitely.
+
+- MUST wrap every script call in `timeout 30` (example below).
+- If the command exits with code 124 (timeout), the gpg dialog is probably
+  waiting for the user.
+- On timeout: do not retry. Tell the user that a gpg passphrase dialog is
+  open and ask when you can retry.
+- Retry only after the user confirms the dialog was answered or is ready to
+  answer it.
+
+```bash
+timeout 30 scripts/retrieve.sh --id UUID
+```
+
 Scripts live at: `$PI_CODING_AGENT_DIR/skills/org-roam-adhoc-memory/scripts/` (default `~/.config/pi/agent/skills/org-roam-adhoc-memory/scripts/`).
 
 ## Search

@@ -12,6 +12,20 @@ Query and modify your org-roam zettelkasten via dedicated bash scripts.
 All scripts return JSON on stdout. Errors return JSON on stderr with exit code 1.
 Pipe to `jq .` for readable output.
 
+## Sync (run first)
+
+Run this once at the start of a session, before any other operation, so the
+vault contains the latest notes:
+
+```bash
+scripts/sync.sh
+```
+
+It runs `git pull --ff-only` in the roam repository. The pull is
+fast-forward only: it never rewrites local history. On failure (diverged
+branches, network error), do not retry with force flags. Report the error to
+the user and continue only when the user says to.
+
 ## Errors (check this first when a script fails)
 
 All script failures return `{"error":"message"}` on stderr with exit code 1.

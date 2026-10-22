@@ -185,12 +185,24 @@ Converts nil/empty-list to an empty vector so the output is [] instead of null."
       (replace-regexp-in-string "^\"\|\"$" "" val)
     val))
 
+(defun org-roam-pi--db-path ()
+  "Return the org-roam DB file path from Emacs config, or nil.
+Reads org-roam-db-location when bound. Returns nil when the variable is
+unbound or the file does not exist, so a stale or missing DB is treated as
+unavailable instead of being created empty by emacsql."
+  (if (boundp 'org-roam-db-location)
+      (let ((path (expand-file-name org-roam-db-location)))
+        (when (file-exists-p path)
+          path))
+    nil))
+
 (defun org-roam-pi--db-available-p ()
   "Return non-nil if org-roam DB can be queried via emacsql."
   (ignore-errors
     (and (require 'org-roam-db nil t)
          (fboundp 'org-roam-db-query)
          (fboundp 'emacsql)
+         (org-roam-pi--db-path)
          t)))
 
 (defun org-roam-pi--parse-properties (props-str)

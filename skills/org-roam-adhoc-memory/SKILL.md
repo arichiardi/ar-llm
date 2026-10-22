@@ -82,11 +82,16 @@ New top-level files use the file-level node template:
 
 ```
 :PROPERTIES:
-:ID:       <uuid>
+:ID:       <id>
 :END:
 #+TITLE: Title
 #+AUTHOR: Andrea Richiardi
 ```
+
+> **ID format**: always use the org-id new format: 32 uppercase hex
+> characters, no dashes (e.g. `9B2463379F7A1FA07C4989C56021E923`). The
+> scripts generate this format. When you supply or reference an ID yourself,
+> match it. Never use dashed UUIDs, to avoid mixing formats in the vault.
 
 Notes added to an existing file become top-level `*` headings with their own `:ID:`.
 

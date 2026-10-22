@@ -50,7 +50,7 @@ make help           # list all available targets
 
 ## Elisp conventions
 
-Some extensions include Emacs Lisp libraries (e.g. `org-roam-pi-memory.el`).
+Skills may include Emacs Lisp libraries (e.g. `skills/org-roam-adhoc-memory/org-roam-adhoc-memory.el`).
 Never paper over unbalanced delimiters by guessing. Repair parens interactively in
 the running Emacs, and let `electric-pair-mode` insert/balance them for you.
 

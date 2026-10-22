@@ -952,26 +952,51 @@ Returns a JSON string."
                               (file . ,(file-relative-name target-file roam-dir))))))))
 
 ;;;###autoload
-(defun org-roam-pi-append-journal (content &optional date)
-  "Append CONTENT to the journal for DATE (YYYY-MM-DD, defaults to today).
+(defun org-roam-pi-append-journal (title content &optional date)
+  "Append a journal entry titled TITLE with body CONTENT for DATE.
+DATE is YYYY-MM-DD and defaults to today. The journal file gets a
+file-level :ID: and a * DATE level-1 title when missing, and the entry
+is appended as a ** HH:MM TITLE level-2 section at the end of the file.
 Returns a JSON string."
   (org-roam-pi--bootstrap)
+  (org-roam-pi--dbg (format "append-journal title=%s date=%s" title (or date "today")))
+  (org-roam-pi--check-content content)
   (let* ((date-str (or date (format-time-string "%Y-%m-%d")))
+         (_ (unless (string-match-p "^[0-9]\\{4\\}-[0-9]\\{2\\}-[0-9]\\{2\\}$" date-str)
+              (error "date must be YYYY-MM-DD: %s" date-str)))
          (journal-dir (expand-file-name org-roam-pi-journal-directory org-roam-pi-directory))
-  (org-roam-pi--dbg (format "append-journal date=%s" (or date "today")))
          (target-file (expand-file-name (format "%s.org.gpg" date-str) journal-dir))
-         (timestamp (format-time-string "%Y-%m-%d %H:%M"))
-         (headline (format "** %s - Journal Entry\n%s\n" timestamp content)))
+         (timestamp (format-time-string "%H:%M"))
+         (entry (format "** %s %s\n%s\n" timestamp title content))
+         (existing (org-roam-pi--read-file target-file))
+         (combined nil))
     (if (not (file-directory-p journal-dir))
         (make-directory journal-dir t))
-
-    (let* ((existing-content (org-roam-pi--read-file target-file))
-           (combined (concat (or existing-content "") headline "\n"))
-           (result (org-roam-pi--encrypt-and-save combined target-file org-roam-pi-gpg-encrypt-to)))
-      (if (stringp result)
-          (org-roam-pi--error result)
+    (if (not (file-exists-p target-file))
+        (setq combined (concat (org-roam-pi--ensure-file-id-drawer "")
+                               (format "* %s\n\n" date-str)
+                               entry "\n"))
+      (let* ((body (or existing ""))
+             (with-title (cond
+                           ((string-match "^\\* [^\n]*$" body)
+                            body)
+                           ((string-match "^:PROPERTIES:\n.*^:END:\n" body)
+                            (let ((pos (match-end 0)))
+                              (concat (substring body 0 pos)
+                                      (format "* %s\n\n" date-str)
+                                      (substring body pos))))
+                           (t
+                            (concat (format "* %s\n\n" date-str) body))))
+             (with-header (org-roam-pi--ensure-file-id-drawer with-title)))
+        (setq combined (concat with-header
+                               (if (string-suffix-p "\n" with-header) "" "\n")
+                               entry "\n"))))
+    (let ((ok (org-roam-pi--save-file combined target-file)))
+      (if (not ok)
+          ok
         (org-roam-pi--json `((status . "appended")
                               (date . ,date-str)
+                              (title . ,title)
                               (file . ,(file-relative-name target-file org-roam-pi-directory))))))))
 
 ;;;###autoload

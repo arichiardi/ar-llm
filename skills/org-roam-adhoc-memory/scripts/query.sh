@@ -8,7 +8,7 @@
 set -uo pipefail
 
 AGENT_DIR="${PI_CODING_AGENT_DIR:-$HOME/.config/pi/agent}"
-EXT_DIR="$AGENT_DIR/extensions/org-roam-adhoc-memory"
+SKILL_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 CONFIG_FILE="$AGENT_DIR/ar-llm/org-roam-adhoc-memory.json"
 DEFAULT_DEBUG_LOG_BASE="${TMPDIR:-/tmp}"
 DEFAULT_DEBUG_LOG_BASE="${DEFAULT_DEBUG_LOG_BASE%/}"
@@ -25,10 +25,9 @@ fi
 DEBUG_LOG="${DEBUG_LOG/#\~/$HOME}"
 
 BOOTSTRAP="(progn
-  (add-to-list 'load-path \"$EXT_DIR\")
   (require 'org)
   (require 'epa-file)
-  (load (expand-file-name \"org-roam-adhoc-memory\" (car load-path)) nil t)
+  (load \"$SKILL_DIR/org-roam-adhoc-memory.el\" nil t)
   (org-roam-pi-apply-config \"$CONFIG_FILE\"))"
 
 _debug() {

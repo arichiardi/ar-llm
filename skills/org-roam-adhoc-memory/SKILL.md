@@ -1,7 +1,7 @@
 ---
 name: org-roam-adhoc-memory
 description: Query and modify the org-roam knowledge base. Use for searching notes, retrieving content, exploring links, traversing the graph, creating notes, or appending journal entries. All operations use bash scripts — never construct elisp manually.
-compatibility: Requires bash, jq, and a running emacsclient with org-roam. The scripts load the Elisp library from the pi agent extensions directory and read config from ar-llm/org-roam-adhoc-memory.json.
+compatibility: Requires bash, jq, and a running emacsclient with org-roam. The scripts load the bundled Elisp library (org-roam-adhoc-memory.el in the skill directory) and read config from ar-llm/org-roam-adhoc-memory.json.
 ---
 
 # Org-Roam Adhoc Memory

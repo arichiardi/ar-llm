@@ -12,7 +12,29 @@ Query and modify your org-roam zettelkasten via dedicated bash scripts.
 All scripts return JSON on stdout. Errors return JSON on stderr with exit code 1.
 Pipe to `jq .` for readable output.
 
-## GPG Timeout (MUST)
+## Errors (check this first when a script fails)
+
+All script failures return `{"error":"message"}` on stderr with exit code 1.
+Match the message to a category below and act. Never retry a failing command
+without a user response, except where stated.
+
+### Temp file not visible to Emacs
+
+```
+*ERROR*: Opening output file: No such file or directory, /tmp/query.XXXXXX/result
+```
+
+The pi sandbox mounts a private `/tmp`. The script creates its working
+directory there, but the host Emacs server cannot see it.
+
+- Do not retry.
+- Suggest to the user: set `ORG_ROAM_PI_MEMORY_TMPDIR` to a directory that is
+  visible to both the pi process and the Emacs server, for example:
+  ```bash
+  export ORG_ROAM_PI_MEMORY_TMPDIR="$HOME/tmp"
+  ```
+
+### GPG passphrase timeout (MUST)
 
 Decrypting `.org.gpg` files can trigger a gpg passphrase dialog. The user may
 not be at the screen to answer it, so the call blocks indefinitely.
@@ -28,6 +50,22 @@ not be at the screen to answer it, so the call blocks indefinitely.
 ```bash
 timeout 30 scripts/retrieve.sh --id UUID
 ```
+
+### GPG cannot encrypt
+
+```
+*ERROR*: GPG did not produce encrypted file
+```
+
+or a `gpg:` error mentioning a missing key (`No public key`, `No secret key`).
+
+Encryption runs gpg inside the Emacs server, using the `gpg-encrypt-to`
+recipients from the config file.
+
+- Do not retry.
+- Ask the user to check that the gpg key and agent are available in the Emacs
+  environment (`gpg -K`, `gpgconf --list-all`). Retry only after the user
+  confirms the key is available.
 
 Scripts live at: `$PI_CODING_AGENT_DIR/skills/org-roam-adhoc-memory/scripts/` (default `~/.config/pi/agent/skills/org-roam-adhoc-memory/scripts/`).
 
@@ -174,11 +212,6 @@ scripts/list-nodes.sh [max]
 Lists all nodes, capped at `max` (default 100).
 
 ## Error Handling
-
-All scripts return clean JSON. On failure:
-- Stderr contains `{"error":"message"}`
-- Exit code is 1
-- Stdout is empty
 
 Check errors before parsing stdout:
 ```bash

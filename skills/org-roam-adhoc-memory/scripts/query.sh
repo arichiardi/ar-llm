@@ -4,16 +4,15 @@
 # Returns clean JSON on stdout, errors as JSON on stderr + exit 1.
 #
 # Debugging: set ORG_ROAM_PI_MEMORY_DEBUG=true to log all activity.
-# The default log path is ~/tmp/org-roam-adhoc-memory/debug.log.
+# The default log path is the OS temp dir (TMPDIR, or /tmp if unset).
 set -uo pipefail
 
 AGENT_DIR="${PI_CODING_AGENT_DIR:-$HOME/.config/pi/agent}"
 SKILL_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 CONFIG_FILE="$AGENT_DIR/ar-llm/org-roam-adhoc-memory.json"
-# Temp and log dirs live under HOME so the Emacs server and this script
-# agree on the paths even when /tmp is namespaced. Override with
-# ORG_ROAM_PI_MEMORY_TMPDIR.
-TMP_BASE="${ORG_ROAM_PI_MEMORY_TMPDIR:-$HOME/tmp}"
+# Temp and log dirs use the OS temp dir: TMPDIR when set, /tmp otherwise.
+# Override with ORG_ROAM_PI_MEMORY_TMPDIR.
+TMP_BASE="${ORG_ROAM_PI_MEMORY_TMPDIR:-${TMPDIR:-/tmp}}"
 DEFAULT_DEBUG_LOG_BASE="$TMP_BASE/org-roam-adhoc-memory"
 DEFAULT_DEBUG_LOG="$DEFAULT_DEBUG_LOG_BASE/debug.log"
 EMACSCLIENT="${EMACSCLIENT:-emacsclient}"

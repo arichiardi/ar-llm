@@ -4,18 +4,21 @@
 # Returns clean JSON on stdout, errors as JSON on stderr + exit 1.
 #
 # Debugging: set ORG_ROAM_PI_MEMORY_DEBUG=true to log all activity.
-# The default log path is $TMPDIR/org-roam-adhoc-memory-debug.log.
+# The default log path is ~/tmp/org-roam-adhoc-memory/debug.log.
 set -uo pipefail
 
 AGENT_DIR="${PI_CODING_AGENT_DIR:-$HOME/.config/pi/agent}"
 SKILL_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 CONFIG_FILE="$AGENT_DIR/ar-llm/org-roam-adhoc-memory.json"
-DEFAULT_DEBUG_LOG_BASE="${TMPDIR:-/tmp}"
-DEFAULT_DEBUG_LOG_BASE="${DEFAULT_DEBUG_LOG_BASE%/}"
-DEFAULT_DEBUG_LOG="$DEFAULT_DEBUG_LOG_BASE/org-roam-adhoc-memory-debug.log"
+# Temp and log dirs live under HOME so the Emacs server and this script
+# agree on the paths even when /tmp is namespaced. Override with
+# ORG_ROAM_PI_MEMORY_TMPDIR.
+TMP_BASE="${ORG_ROAM_PI_MEMORY_TMPDIR:-$HOME/tmp}"
+DEFAULT_DEBUG_LOG_BASE="$TMP_BASE/org-roam-adhoc-memory"
+DEFAULT_DEBUG_LOG="$DEFAULT_DEBUG_LOG_BASE/debug.log"
 EMACSCLIENT="${EMACSCLIENT:-emacsclient}"
 
-# Read the debug log path from the config file; fall back to the OS temp dir
+# Read the debug log path from the config file; fall back to the HOME-based default
 DEBUG_LOG=""
 if [ -f "$CONFIG_FILE" ]; then
   DEBUG_LOG=$(jq -r '.debug["log-file"] // empty' "$CONFIG_FILE" 2>/dev/null)
@@ -23,6 +26,7 @@ fi
 [ -n "$DEBUG_LOG" ] || DEBUG_LOG="$DEFAULT_DEBUG_LOG"
 # Expand ~ in path
 DEBUG_LOG="${DEBUG_LOG/#\~/$HOME}"
+mkdir -p "$(dirname "$DEBUG_LOG")"
 
 BOOTSTRAP="(progn
   (require 'org)
@@ -44,7 +48,7 @@ fi
 ELISP_EXPR="$1"
 _debug "INPUT: $ELISP_EXPR"
 
-TMPDIR_QUERY=$(mktemp -d)
+TMPDIR_QUERY=$(mktemp -d "$TMP_BASE/query.XXXXXX")
 STDOUT_FILE="$TMPDIR_QUERY/stdout"
 STDERR_FILE="$TMPDIR_QUERY/stderr"
 RESULT_FILE="$TMPDIR_QUERY/result"

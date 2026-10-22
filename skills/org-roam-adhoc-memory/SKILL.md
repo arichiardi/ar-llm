@@ -78,6 +78,24 @@ scripts/create.sh "Title" "Content" [--file PATH] [--tags TAG1 TAG2]
 
 Auto-picks file path if `--file` omitted. Auto-encrypts to `.org.gpg`.
 
+New top-level files use the file-level node template:
+
+```
+:PROPERTIES:
+:ID:       <uuid>
+:END:
+#+TITLE: Title
+#+AUTHOR: Andrea Richiardi
+```
+
+Notes added to an existing file become top-level `*` headings with their own `:ID:`.
+
+> **Rule**: a top-level file must contain at least one `*` heading, or it is
+> empty and useless. Before creating a new top-level file, check that the
+> content argument includes at least one `*` section (e.g. `* Overview`). If
+> it does not, ask the user for the sections the file should contain before
+> creating it.
+
 ## Add Child Heading
 
 ```bash

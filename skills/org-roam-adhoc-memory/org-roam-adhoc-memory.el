@@ -122,13 +122,15 @@ This function converts them to Elisp lists."
 
 (defun org-roam-pi-apply-config (config-path)
   "Read CONFIG-PATH (JSON) and apply all org-roam-pi settings.
-Called once at extension start before any other function."
-  (let ((cfg (with-temp-buffer
-               (insert-file-contents config-path)
-               (let (json-object-type)
-                 (setf json-object-type 'plist)
-                 (json-read)))))
-    (when (org-roam-pi--json-get cfg :roam-directory)
+Called once at extension start before any other function.
+When CONFIG-PATH does not exist, keep the built-in defaults."
+  (let ((cfg (when (file-exists-p config-path)
+               (with-temp-buffer
+                 (insert-file-contents config-path)
+                 (let (json-object-type)
+                   (setf json-object-type 'plist)
+                   (json-read))))))
+    (when (and cfg (org-roam-pi--json-get cfg :roam-directory))
       (setq org-roam-pi-directory (expand-file-name (org-roam-pi--json-get cfg :roam-directory))))
     (when (org-roam-pi--json-get cfg :gpg-encrypt-to)
       (setq org-roam-pi-gpg-encrypt-to (org-roam-pi--json-get cfg :gpg-encrypt-to)))

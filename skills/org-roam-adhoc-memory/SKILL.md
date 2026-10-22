@@ -12,19 +12,34 @@ Query and modify your org-roam zettelkasten via dedicated bash scripts.
 All scripts return JSON on stdout. Errors return JSON on stderr with exit code 1.
 Pipe to `jq .` for readable output.
 
-## Sync (run first)
+## Sync (check first, ask before pulling)
 
-Run this once at the start of a session, before any other operation, so the
-vault contains the latest notes:
+At the start of a session, before any other operation, check whether the
+vault is behind its remote:
 
 ```bash
-scripts/sync.sh
+scripts/sync.sh --check
 ```
 
-It runs `git pull --ff-only` in the roam repository. The pull is
-fast-forward only: it never rewrites local history. On failure (diverged
-branches, network error), do not retry with force flags. Report the error to
-the user and continue only when the user says to.
+The check fetches from the remote (about 1 s) and reports
+`{"status":"up-to-date"|"behind","behind":N,"ahead":N,"dirty":bool}`.
+It never modifies the working tree.
+
+- `status` is `up-to-date`: proceed.
+- `behind` is greater than 0: tell the user the vault is N commits behind
+  and ask whether to sync. Syncing pulls the remote notes and takes longer
+  than a normal call. On yes, run `scripts/sync.sh`. On no, proceed with
+  the stale vault, state in your results that the vault is stale, and do
+  not ask again this session.
+- `dirty` is true: report the local uncommitted changes to the user. Do not
+  pull.
+- The check fails (network error): proceed without syncing and mention it
+  once. Do not retry.
+
+`scripts/sync.sh` without flags runs `git pull --ff-only` in the roam
+repository. The pull is fast-forward only: it never rewrites local history.
+On failure (diverged branches, network error), do not retry with force
+flags. Report the error to the user and continue only when the user says to.
 
 ## Errors (check this first when a script fails)
 

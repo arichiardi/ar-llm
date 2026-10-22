@@ -1000,46 +1000,53 @@ Returns a JSON string."
                               (file . ,(file-relative-name target-file org-roam-pi-directory))))))))
 
 ;;;###autoload
-(defun org-roam-pi-append-section (node-id title section-title content)
-  "Append a section to an existing node, at the end of its subtree.
-NODE-ID or TITLE identifies the target node. SECTION-TITLE and CONTENT
-are the new heading and its body. Returns a JSON string."
+(defun org-roam-pi-add-child (target parent-title child-title content &optional tags)
+  "Insert a new heading titled CHILD-TITLE under an existing heading.
+TARGET is a node ID or a file path (relative to the roam directory).
+PARENT-TITLE is the exact headline title to nest under. Use \"\" to add
+a top-level heading at the end of the file. The new heading gets its own
+ID and the level below the parent. TAGS is an optional list of tag
+strings stored as a ROAM_REFS property.
+Returns a JSON string."
   (org-roam-pi--bootstrap)
-  (org-roam-pi--dbg (format "append-section id=%s title=%s section=%s" node-id title section-title))
-  (let ((id node-id)
-        (node nil))
-    (if (not id)
-        (when title
-          (setq node (org-roam-pi--node-from-title title))
-          (when node (setq id (org-roam-pi--node-id node)))))
-    (if (not (and id node))
-        (setq node (org-roam-pi--node-from-id id)))
-    (if (not node)
-        (org-roam-pi--error "Node not found")
-      (let* ((file (org-roam-pi--node-file node))
-             (level (org-roam-pi--node-level node))
-             (full-content (org-roam-pi--read-file file)))
-        (if (not full-content)
-            (org-roam-pi--error (format "Could not read file: %s" file))
-          (with-temp-buffer
-            (insert full-content)
-            (org-mode)
-            (goto-char (point-min))
-            (if (not (re-search-forward
-                      (concat "^" (make-string level ?\*) " " (regexp-quote (org-roam-pi--node-title node)) "$")
-                      nil t))
-                (org-roam-pi--error (format "Node heading not found in file: %s" file))
-              (org-end-of-subtree t t)
-              ;; Insert the new section at the end of the node's subtree.
-              (insert (concat "\n** " section-title "\n" content "\n"))
-              (let ((new-content (buffer-substring-no-properties (point-min) (point-max))))
-                (let ((result (org-roam-pi--encrypt-and-save new-content file org-roam-pi-gpg-encrypt-to)))
-                  (if (stringp result)
-                      (org-roam-pi--error result)
-                    (org-roam-pi--json `((status . "appended")
-                                          (title . ,(org-roam-pi--node-title node))
-                                          (section . ,section-title)
-                                          (file . ,(file-relative-name file org-roam-pi-directory))))))))))))))
+  (org-roam-pi--dbg (format "add-child target=%s parent=%s child=%s" target parent-title child-title))
+  (org-roam-pi--check-content content)
+  (let* ((file (org-roam-pi--resolve-target-file target))
+         (full-content (org-roam-pi--read-file file)))
+    (if (not full-content)
+        (org-roam-pi--error (format "Could not read file: %s" file))
+      (let ((org-id (org-roam-pi--generate-id))
+            (tag-line (when tags (format ":ROAM_REFS: %s\n" (mapconcat #'identity tags " ")))))
+        (with-temp-buffer
+          (insert full-content)
+          (org-mode)
+          (if (string= parent-title "")
+              (progn
+                (goto-char (point-max))
+                (unless (eolp) (insert "\n"))
+                (insert (concat "* " child-title "\n"
+                                ":PROPERTIES:\n:ID:       " org-id "\n"
+                                (or tag-line "")
+                                ":END:\n\n" content "\n")))
+            (let ((parent (org-roam-pi--find-heading parent-title)))
+              (if (not parent)
+                  (error "Parent heading not found: %s" parent-title)
+                (goto-char (car parent))
+                (org-end-of-subtree t t)
+                (insert (concat "\n"
+                                (make-string (1+ (cdr parent)) ?\*)
+                                " " child-title "\n"
+                                ":PROPERTIES:\n:ID:       " org-id "\n"
+                                (or tag-line "")
+                                ":END:\n\n" content "\n"))))
+          (let ((new-content (buffer-substring-no-properties (point-min) (point-max))))
+            (let ((ok (org-roam-pi--save-file new-content file)))
+              (if (not ok)
+                  ok
+                (org-roam-pi--json `((status . "added")
+                                      (title . ,child-title)
+                                      (id . ,org-id)
+                                      (file . ,(file-relative-name file org-roam-pi-directory)))))))))))))
 
 (defun org-roam-pi--count-stars (line)
   "Return the number of leading * characters in LINE."

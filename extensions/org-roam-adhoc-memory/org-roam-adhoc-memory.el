@@ -609,6 +609,93 @@ Returns a file path string or nil."
     (when candidates
       (cdr (assoc 'file (car candidates))))))
 
+;;;; Target, heading, and file header helpers
+
+(defun org-roam-pi--resolve-target-file (target)
+  "Resolve TARGET to an absolute file path.
+TARGET is a 32-char org ID or a file path (relative to the roam directory).
+Signals an error when an ID does not match any node."
+  (if (string-match-p "^[0-9A-Fa-f]\\{32\\}$" target)
+      (let ((node (org-roam-pi--node-from-id target)))
+        (if node
+            (org-roam-pi--node-file node)
+          (error "Node not found: %s" target)))
+    (expand-file-name target org-roam-pi-directory)))
+
+(defun org-roam-pi--find-heading (title)
+  "Find a heading line matching TITLE exactly, at any level, in the current buffer.
+Returns (pos . level) where POS is the start of the line and LEVEL the star
+count, or nil when no heading has that title."
+  (save-excursion
+    (goto-char (point-min))
+    (if (re-search-forward (concat "^\\*+ " (regexp-quote title) "$") nil t)
+        (let ((line (buffer-substring (line-beginning-position) (line-end-position))))
+          (cons (line-beginning-position) (org-roam-pi--count-stars line)))
+      nil)))
+
+(defun org-roam-pi--ensure-file-id-drawer (content)
+  "Ensure CONTENT starts with a :PROPERTIES: drawer containing an :ID:.
+Generate the ID when missing. Returns the new content string."
+  (with-temp-buffer
+    (insert (or content ""))
+    (goto-char (point-min))
+    (if (looking-at ":PROPERTIES:")
+        (let ((has-id nil))
+          (when (re-search-forward "^:END:" nil t)
+            (let ((drawer-end (match-beginning 0)))
+              (goto-char (point-min))
+              (when (search-forward ":ID:" drawer-end t)
+                (setq has-id t))))
+          (unless has-id
+            (goto-char (point-min))
+            (when (re-search-forward "^:END:" nil t)
+              (beginning-of-line)
+              (insert (format ":ID:       %s\n" (org-roam-pi--generate-id))))))
+      (insert (format ":PROPERTIES:\n:ID:       %s\n:END:\n" (org-roam-pi--generate-id))))
+    (buffer-substring-no-properties (point-min) (point-max))))
+
+(defun org-roam-pi--ensure-file-node-header (content title &optional author)
+  "Ensure CONTENT starts with a file-level node header.
+The header is a :PROPERTIES: drawer with an :ID: (generated when missing)
+followed by a #+TITLE: line set to TITLE when missing. Add #+AUTHOR: AUTHOR
+only when AUTHOR is non-nil and no #+AUTHOR: line exists.
+Returns the new content string. Existing content follows the header."
+  (let ((with-drawer (org-roam-pi--ensure-file-id-drawer content)))
+    (if (string-match-p "\\(?:^\\|\\n\\)#\\+TITLE:" with-drawer)
+        with-drawer
+      (let ((pos (with-temp-buffer
+                   (insert with-drawer)
+                   (goto-char (point-min))
+                   (re-search-forward "^:END:" nil t)
+                   (line-end-position))))
+        (concat (substring with-drawer 0 pos)
+                (format "\n#+TITLE: %s\n" title)
+                (if author (format "#+AUTHOR: %s\n" author) "")
+                (substring with-drawer pos))))))
+
+(defun org-roam-pi--check-content (content)
+  "Signal an error when CONTENT has lines that start with *.
+Such lines become org headings and break the file structure.
+Returns nil when CONTENT is safe."
+  (dolist (line (split-string (or content "") "\n"))
+    (when (string-match-p "^\\*" line)
+      (error "content must not contain org headings (lines starting with *)")))
+  nil)
+
+(defun org-roam-pi--save-file (content file)
+  "Write CONTENT to FILE, encrypting when FILE ends in .gpg.
+Returns t on success, or an error JSON string on gpg failure."
+  (if (string-suffix-p ".gpg" file)
+      (let ((result (org-roam-pi--encrypt-and-save content file org-roam-pi-gpg-encrypt-to)))
+        (if (stringp result)
+            (org-roam-pi--error result)
+          t))
+    (with-temp-buffer
+      (insert content)
+      (write-region (point-min) (point-max) file nil 'nomesg))
+    t))
+
+
 ;;;###autoload
 (defun org-roam-pi-search (query &optional max-results)
   "Search org-roam nodes by QUERY across titles, aliases, and properties.

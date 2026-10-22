@@ -1055,74 +1055,52 @@ Returns a JSON string."
       (setq n (1+ n)) (setq i (1+ i)))
     n))
 
-(defun org-roam-pi-replace-section (node-id title section-title content)
-  "Replace the body of an existing section inside a node.
-NODE-ID or TITLE identifies the target node. SECTION-TITLE is the section
-to replace; its heading line is kept, its body becomes CONTENT.
+;;;###autoload
+(defun org-roam-pi-edit-entry (target title content)
+  "Replace the body of an existing heading titled TITLE in the file of TARGET.
+TARGET is a node ID or a file path (relative to the roam directory).
+The heading line, its property drawer and its ID stay unchanged. Only the
+direct body is replaced; subheadings of TITLE are preserved.
 Returns a JSON string."
   (org-roam-pi--bootstrap)
-  (org-roam-pi--dbg (format "replace-section id=%s title=%s section=%s" node-id title section-title))
-  (let ((id node-id)
-        (node nil))
-    (if (not id)
-        (when title
-          (setq node (org-roam-pi--node-from-title title))
-          (when node (setq id (org-roam-pi--node-id node)))))
-    (if (not (and id node))
-        (setq node (org-roam-pi--node-from-id id)))
-    (if (not node)
-        (org-roam-pi--error "Node not found")
-      (let* ((file (org-roam-pi--node-file node))
-             (level (org-roam-pi--node-level node))
-             (sec-level (1+ level))
-             (full-content (org-roam-pi--read-file file)))
-        (if (not full-content)
-            (org-roam-pi--error (format "Could not read file: %s" file))
-          (with-temp-buffer
-            (insert full-content)
-            (org-mode)
-            (goto-char (point-min))
-            (if (not (re-search-forward
-                      (concat "^" (make-string level ?\*) " " (regexp-quote (org-roam-pi--node-title node)) "$")
-                      nil t))
-                (org-roam-pi--error (format "Node heading not found in file: %s" file))
-              (let* ((node-heading-pos (point))
-                     (node-end (progn (org-end-of-subtree t t) (point)))
-                     (sec-start nil) (sec-end nil) (heading-line nil))
-                (goto-char node-heading-pos)
-                (forward-line 1)
-                (while (and (re-search-forward "^\\*+" node-end t) (not sec-start))
-                  (let ((line (buffer-substring (match-beginning 0) (line-end-position))))
-                    (if (= (org-roam-pi--count-stars line) sec-level)
-                        (when (string= (replace-regexp-in-string "^\\*+ *\\(.*\\)$" "\\1" line) section-title)
-                          (setq sec-start (match-beginning 0))))))
-                (if (not sec-start)
-                    (org-roam-pi--error (format "section not found: %s" section-title))
-                  ;; Capture the heading line BEFORE moving point.
-                  (setq heading-line (save-excursion
-                                       (goto-char sec-start)
-                                       (buffer-substring (point) (line-end-position))))
-                  ;; Find the section end: next heading at sec-level or shallower.
-                  (goto-char sec-start)
+  (org-roam-pi--dbg (format "edit-entry target=%s title=%s" target title))
+  (org-roam-pi--check-content content)
+  (let* ((file (org-roam-pi--resolve-target-file target))
+         (full-content (org-roam-pi--read-file file)))
+    (if (not full-content)
+        (org-roam-pi--error (format "Could not read file: %s" file))
+      (with-temp-buffer
+        (insert full-content)
+        (org-mode)
+        (let ((heading (org-roam-pi--find-heading title)))
+          (if (not heading)
+              (error "Entry not found: %s" title)
+            (goto-char (car heading))
+            (forward-line 1)
+            (let ((body-start (point)))
+              (when (looking-at ":PROPERTIES:")
+                (when (re-search-forward "^:END:" nil t)
                   (forward-line 1)
-                  (setq sec-end node-end)
-                  (while (re-search-forward "^\\*+" node-end t)
-                    (let ((line (buffer-substring (match-beginning 0) (line-end-position))))
-                      (if (<= (org-roam-pi--count-stars line) sec-level)
-                          (progn
-                            (setq sec-end (line-beginning-position))
-                            (goto-char node-end)))))
-                  (delete-region sec-start sec-end)
-                  (goto-char sec-start)
-                  (insert (concat heading-line "\n" content "\n"))
-                  (let ((new-content (buffer-substring-no-properties (point-min) (point-max))))
-                    (let ((result (org-roam-pi--encrypt-and-save new-content file org-roam-pi-gpg-encrypt-to)))
-                      (if (stringp result)
-                          (org-roam-pi--error result)
-                        (org-roam-pi--json `((status . "replaced")
-                                              (title . ,(org-roam-pi--node-title node))
-                                              (section . ,section-title)
-                                              (file . ,(file-relative-name file org-roam-pi-directory))))))))))))))))
+                  (setq body-start (point))))
+              (let ((body-end (point-max)))
+                (while (re-search-forward "^\\*+" (point-max) t)
+                  (setq body-end (line-beginning-position))
+                  (goto-char (point-max)))
+                (delete-region body-start body-end)
+                (goto-char body-start)
+                (insert (concat "\n"
+                                (if (string-suffix-p "\n" content)
+                                    (substring content 0 (1- (length content)))
+                                  content)
+                                "\n"))
+                (let ((new-content (buffer-substring-no-properties (point-min) (point-max))))
+                  (let ((ok (org-roam-pi--save-file new-content file)))
+                    (if (not ok)
+                        ok
+                      (org-roam-pi--json `((status . "edited")
+                                            (title . ,title)
+                                            (file . ,(file-relative-name file org-roam-pi-directory)))))))))))))))
+
 (defun org-roam-pi--build-entry-neighborhood ()
   "Build entry node neighborhood section.
 Returns a string of markdown text."

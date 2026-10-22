@@ -923,10 +923,9 @@ Returns a JSON string."
            (file-exists (file-exists-p target-file))
            (existing-content (and file-exists
                                   (org-roam-pi--read-file target-file)))
-           ;; New top-level file: file-level node template
+           ;; New top-level file: file-level node header (ID drawer, title, author)
            (new-file-template
-            (format ":PROPERTIES:\n:ID:       %s\n%s:END:\n#+TITLE: %s\n#+AUTHOR: %s\n\n%s\n"
-                    org-id (or tag-line "") title org-roam-pi-author content))
+            (org-roam-pi--ensure-file-node-header content title org-roam-pi-author))
            ;; Append to existing file: top-level headline with its own ID
            (new-note-headline
             (format "* %s\n:PROPERTIES:\n:ID:       %s\n%s:END:\n\n%s\n"

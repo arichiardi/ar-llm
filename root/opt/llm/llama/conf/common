@@ -5,7 +5,7 @@ LLAMA_ARG_HOST=0.0.0.0
 LLAMA_ARG_PORT=10434
 LLAMA_ARG_THREADS_HTTP = 4
 
-LLAMA_CACHE=/var/lib/llm/models
+LLAMA_CACHE=/var/lib/llm/models/llamacpp
 
 LLAMA_ARG_MODELS_PRESET=/etc/conf.d/llama/router-preset.ini
 LLAMA_ARG_MODELS_DIR=/var/lib/llm/models

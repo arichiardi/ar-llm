@@ -1,0 +1,42 @@
+version = 1
+
+[*]
+stop-timeout = 3600
+
+reasoning-budget = 2048
+reasoning-budget-message = " -- Reasoning budget exceeded, proceed to final answer."
+
+batch-size = 4096
+ubatch-size = 1024
+
+temp = 1.0
+top-p = 0.95
+top-k = 20
+min-p = 0.0
+presence-penalty = 0.0
+
+jinja = true
+
+metrics = true
+
+spec-draft-threads = 22 
+
+kv-unified = true
+
+ngl = 999
+fa = on
+
+load-mode = none
+
+[LFM3-Omni-2B]
+alias = alba-ai/LFM3-Omni-2B
+model = /var/lib/llm/models/llamacpp/LiquidAI/LFM3-Omni-2B-GGUF/LFM3-Omni-2B-BF16.gguf
+mmproj = /var/lib/llm/models/llamacpp/LiquidAI/LFM3-Omni-2B-GGUF/mmproj-LFM3-Omni-2B-BF16.gguf
+mmproj-offload = true
+reasoning = off
+
+temp = 0.0
+top-p = 1.0
+top-k = 1
+min-p = 0.0
+repeat-penalty = 1.0

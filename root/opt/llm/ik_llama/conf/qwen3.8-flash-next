@@ -1,0 +1,55 @@
+# ik_llama.cpp - Qwen3.8-Flash-Next, ji-farthing v3 IQ3_KT (text-only)
+#
+# Model card: https://huggingface.co/ji-farthing/Qwen3.8-Flash-Next-ik-llama-GGUF
+#
+# Hardware target: one RTX 4060 (8 GiB VRAM), 62 GiB RAM, 44 cores.
+#
+# Download:
+#   hfdownloader download ji-farthing/Qwen3.8-Flash-Next-ik-llama-GGUF \
+#     -F 'IQ3_KT,MTP' -E 'imatrix' \
+#     --local-dir /var/lib/llm/models/ik_llama
+
+# --defer-ple leaves the PLE table on disk. The 47.2 GiB of routed experts then
+# live in RAM, which fits the 62 GiB without freeing anything. IQ4_KT (52.6 GiB)
+# swaps; change only the model path if you want to compare.
+#
+# GGML_CUDA_NO_PINNED_WEIGHTS keeps the large expert weights pageable (low RAM)
+# while the small staging buffers stay pinned, which speeds up the host-to-device
+# copies. Measured: RSS 48.9 GiB, swap 1.7 GiB.
+GGML_CUDA_NO_PINNED_WEIGHTS=1
+
+LLAMA_LOG_COLORS=1
+LLAMA_ARG_ENDPOINT_METRICS=1
+
+# -ngl 49 puts the 4.5 GiB of non-expert tensors on the GPU; the experts stay in
+# RAM via -ot.
+#
+# -b 4096 -ub 2048: the experts sit in pinned host memory and are copied to the
+# GPU for the batch matmuls, so one large micro batch amortizes the copy over 4x
+# more tokens than -ub 512. Measured on this card: prompt eval 76.61 t/s at
+# -ub 512, 141.14 t/s at -ub 2048 (1.84x). Generation is unchanged, it is
+# memory-bandwidth bound. -ub 4096 would need about 4 GiB of compute buffer and
+# pushes the card past 9 GiB, so it OOMs. If -ub 2048 ever OOMs, lower -ub to
+# 1024 first, then lower -ngl (40, then 32) to move attention layers to the CPU.
+#
+# Compute buffers at -ub 2048: CUDA0 model 4570.57 MiB, CUDA0 KV 488.33 MiB,
+# CUDA0 compute 1980.01 MiB, CUDA_Host compute 404.35 MiB (about 7.27 GiB total).
+#
+# -c 32768 is about the 8 GiB ceiling.
+#
+# Cache types ik_llama accepts: f32 f16 bf16 q8_0 q4_0 q4_1 iq4_nl q5_0 q5_1
+# q6_0 q8_KV. q6_0 is nearly lossless and smaller than the card's q8_0. Use
+# q5_1 to save more VRAM, or -ctk-first/-ctk-last to mix per layer.
+#
+# -t / -tb: the Xeon E5-2699 v4 has 22 cores and 44 threads. This workload is
+# memory-bandwidth-bound, so use the physical cores. Hyperthreading (44) usually
+# makes generation slower. Tune -t between 16 and 22 with llama-bench.
+#
+# -rtr is not used: IQ3_KT has no row-interleaved variant, so the log reports
+# "Repacked 0 tensors". See the ik_llama.cpp README warning about -rtr with
+# hybrid CPU/GPU MoE inference.
+LLAMA_ARGS=--host 0.0.0.0 --port 11434 --alias alba-ai/qwen3.8-flash-next --model /var/lib/llm/models/ik_llama/ji-farthing/Qwen3.8-Flash-Next-ik-llama-GGUF/Qwen3.8-Flash-Next-ik_llama-v3-IQ3_KT-00001-of-00002.gguf --defer-ple -ngl 49 -ot ffn_.*_exps=CPU -fa on -ctk q6_0 -ctv q6_0 -ictk q8_0 --jinja -c 32768 -b 4096 -ub 2048 --ctx-checkpoints 16 -t 22 -tb 22 --no-mmap
+
+# MTP head: 2.21 GiB more on the GPU. On 8 GiB it only fits with a small context.
+# To enable it, lower -c to about 16384 and append these two arguments:
+#   --spec-type mtp:n_max=1,p_min=0.0 -md /var/lib/llm/models/ik_llama/ji-farthing/Qwen3.8-Flash-Next-ik-llama-GGUF/Qwen3.8-Flash-Next-MTP-ik_llama-IQ4_KT.gguf

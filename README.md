@@ -54,11 +54,13 @@ Each extension package contains its own `package.json`, `README.md`, `LICENSE`, 
 ```
 root/
 ├── etc/conf.d/                              # symlinks into /opt/llm
+│   ├── ik_llama -> ../../opt/llm/ik_llama/conf
 │   ├── llama -> ../../opt/llm/llama/conf
 │   └── vllm  -> ../../opt/llm/vllm/conf
 ├── opt/llm/
 │   ├── bin/                                 # llama.cpp / vLLM wrapper scripts
 │   ├── chat-templates/                      # .jinja chat templates
+│   ├── ik_llama/conf/                       # ik_llama server env files
 │   ├── llama/conf/                          # llama-server env files
 │   ├── mcp-proxy/Containerfile
 │   └── vllm/                                # conf/, Containerfile, entrypoint
@@ -83,6 +85,7 @@ sudo rsync -a \
 
 # /etc/conf.d symlinks (relative, so the tree is relocatable)
 sudo mkdir -p root/etc/conf.d
+sudo ln -sfn ../../opt/llm/ik_llama/conf root/etc/conf.d/ik_llama
 sudo ln -sfn ../../opt/llm/llama/conf root/etc/conf.d/llama
 sudo ln -sfn ../../opt/llm/vllm/conf  root/etc/conf.d/vllm
 ```

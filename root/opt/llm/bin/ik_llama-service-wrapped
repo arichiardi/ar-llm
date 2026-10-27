@@ -24,4 +24,4 @@ export NTFY_TOPIC=services_task
 
 wrap-ntfy \
   wrap-result \
-    sudo systemctl --full --no-pager --machine=llama-cpp@ --user $systemd_action ik_llama@$env_name
+    llm-systemctl $systemd_action "ik_llama@$env_name"

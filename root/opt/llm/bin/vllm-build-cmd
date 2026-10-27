@@ -7,6 +7,9 @@ env_file=${2:-.env}
 
 source ${env_file}
 
+# shellcheck source=/dev/null
+. ar-helpers.sh
+
 echo "env DOCKER_BUILDKIT=1 podman build . \
 -f docker/Dockerfile \
 --build-arg RUN_WHEEL_CHECK=false \
@@ -14,8 +17,8 @@ echo "env DOCKER_BUILDKIT=1 podman build . \
 --build-arg SCCACHE_BUCKET_NAME=${SCCACHE_BUCKET_NAME} \
 --build-arg SCCACHE_REGION_NAME=${SCCACHE_REGION_NAME} \
 --build-arg SCCACHE_S3_NO_CREDENTIALS=${SCCACHE_S3_NO_CREDENTIALS} \
---build-arg max_jobs=16 \
---build-arg nvcc_threads=4 \
+--build-arg max_jobs=$(compile_threads normal) \
+--build-arg nvcc_threads=$(compile_threads min) \
 --build-arg torch_cuda_arch_list="" \
 --env=AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID} \
 --env=AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY} \

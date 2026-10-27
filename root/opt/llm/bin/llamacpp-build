@@ -1,4 +1,9 @@
-# Use CMAKE_BUILD_PARALLEL_LEVEL for parallelism
+# Parallel compile threads. Forward the first argument to compile_threads:
+# max, normal (default), min, or a number.
+# shellcheck source=/dev/null
+. ar-helpers.sh
+
+export CMAKE_BUILD_PARALLEL_LEVEL="$(compile_threads "${1:-normal}")"
 
 cmake -B build \
       -DCMAKE_BUILD_TYPE=Release \
@@ -26,3 +31,5 @@ cmake -B build \
 cmake --build build --config Release
 
 cmake --install build
+
+unset CMAKE_BUILD_PARALLEL_LEVEL

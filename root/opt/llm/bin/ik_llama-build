@@ -11,6 +11,13 @@ fi
 
 pkgname=ik_llama
 
+# Parallel compile threads. Forward the first argument to compile_threads:
+# max, normal (default), min, or a number.
+# shellcheck source=/dev/null
+. ar-helpers.sh
+
+export CMAKE_BUILD_PARALLEL_LEVEL="$(compile_threads "${1:-normal}")"
+
 cmake -B build \
       -DCMAKE_BUILD_TYPE=Release \
       -DCMAKE_INSTALL_PREFIX=/opt/$pkgname \
@@ -32,8 +39,10 @@ cmake -B build \
       -DLLAMA_BUILD_NUMBER="$build_number" \
       -DLLAMA_BUILD_COMMIT="$build_commit" \
       -DGGML_NATIVE=ON \
-      -Wno-dev
+      -Wno-author
 
 cmake --build build --config Release
 
 cmake --install build
+
+unset CMAKE_BUILD_PARALLEL_LEVEL

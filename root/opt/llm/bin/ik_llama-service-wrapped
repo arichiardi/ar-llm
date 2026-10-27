@@ -1,0 +1,27 @@
+#!/bin/bash
+set -eu
+
+script_name=$(basename "$0")
+
+action=$1
+env_name="${2:-%.*}"
+
+case "$action" in
+  start)
+    export systemd_action=restart
+    ;;
+  stop)
+    export systemd_action=stop
+    ;;
+  *)
+    echo "Usage: $0 start|stop <conf.env>" >&2
+    exit 2
+    ;;
+esac
+
+export NTFY_SCRIPT_NAME=$script_name
+export NTFY_TOPIC=services_task
+
+wrap-ntfy \
+  wrap-result \
+    sudo systemctl --full --no-pager --machine=llama-cpp@ --user $systemd_action ik_llama@$env_name

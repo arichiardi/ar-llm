@@ -41,10 +41,21 @@ It never modifies the working tree.
 - The check fails (network error): proceed without syncing and mention it
   once. Do not retry.
 
-`scripts/sync.sh` without flags runs `git pull --ff-only` in the roam
-repository. The pull is fast-forward only: it never rewrites local history.
-On failure (diverged branches, network error), do not retry with force
+`scripts/sync.sh` without flags does two steps. First it runs
+`git pull --ff-only` in the roam repository. The pull is fast-forward only:
+it never rewrites local history. Then it refreshes the org-roam database
+with `org-roam-db-sync`, so notes pulled from the remote and notes written
+by this session become visible to search and retrieve. Without the database
+refresh, every query stays stale.
+
+On a git failure (diverged branches, network error), do not retry with force
 flags. Report the error to the user and continue only when the user says to.
+If the pull succeeds but the database refresh fails, report both parts. The
+queries stay stale until the database sync succeeds.
+
+`scripts/db-sync.sh` refreshes the database only and leaves git alone. Run
+it after `create.sh`, `append-journal.sh`, `add-child.sh`, or
+`edit-entry.sh`, because those write files but do not index them.
 
 ## Errors (read before retrying a failure)
 

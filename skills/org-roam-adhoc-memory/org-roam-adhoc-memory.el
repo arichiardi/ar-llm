@@ -722,6 +722,22 @@ Returns t on success, or an error JSON string on gpg failure."
 
 
 ;;;###autoload
+(defun org-roam-pi-sync-db ()
+  "Synchronize the org-roam database with the notes on disk.
+Returns a JSON string. This makes notes written or pulled since the
+last sync visible to search and retrieve."
+  (org-roam-pi--dbg "sync-db")
+  (if (not (require 'org-roam nil t))
+      (org-roam-pi--error "org-roam is not available in Emacs")
+    (condition-case err
+        (progn
+          (let ((org-roam-directory org-roam-pi-directory))
+            (org-roam-db-sync))
+          (org-roam-pi--json '((status . "db-synced"))))
+      (error
+       (org-roam-pi--error (error-message-string err))))))
+
+;;;###autoload
 (defun org-roam-pi-search (query &optional max-results)
   "Search org-roam nodes by QUERY across titles, aliases, and properties.
 MAX-RESULTS caps the output (default 10).

@@ -58,4 +58,13 @@ if ! OUT=$(git -C "$ROAM_DIR" pull --ff-only 2>&1); then
   exit 1
 fi
 
-jq -n --arg out "$OUT" '{status:"synced", output:$out}'
+# The pull brings new .org files, but the org-roam DB is a separate index.
+# Refresh it so queries see pulled notes and any local writes.
+DB_SCRIPT="$(dirname "$0")/db-sync.sh"
+if ! DB_OUT=$(timeout 600 "$DB_SCRIPT" 2>&1); then
+  jq -n --arg out "$OUT" --arg db "$DB_OUT" \
+    '{status:"git-synced-db-failed", output:$out, db:$db}' >&2
+  exit 1
+fi
+
+jq -n --arg out "$OUT" --arg db "$DB_OUT" '{status:"synced", output:$out, db:$db}'

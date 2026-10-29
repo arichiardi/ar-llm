@@ -311,6 +311,19 @@ Returns the string content or nil on error."
        (message "org-roam-pi: failed to read %s: %s" file-path (error-message-string err))
        nil))))
 
+(defmacro org-roam-pi--with-org-buffer (content &rest body)
+  "Insert CONTENT into a temporary Org buffer, then evaluate BODY.
+BODY runs in the buffer and its value is returned. Set `org-mode' with
+`delay-mode-hooks', so the user's `org-mode-hook' does not run. This
+avoids starting slow modes such as `flyspell-mode' in throwaway buffers.
+Kill the buffer when BODY exits."
+  (declare (indent 1) (debug t))
+  `(with-temp-buffer
+     (insert ,content)
+     (delay-mode-hooks
+       (org-mode)
+       ,@body)))
+
 
 ;;;; Walk org files in roam directory
 
@@ -466,9 +479,7 @@ Includes both headline-level and file-level nodes."
   (let ((content (org-roam-pi--read-file file-path)))
     (if (not content)
         '()
-      (with-temp-buffer
-        (insert content)
-        (org-mode)
+      (org-roam-pi--with-org-buffer content
         (let* ((tree (org-element-parse-buffer))
                (headlines (org-element-map tree 'headline #'identity))
                (nodes '()))
@@ -774,8 +785,7 @@ Returns a JSON string with title, file, and content."
              (content full-content))
         ;; For headline-level nodes, extract only the subtree
         (when (and full-content (> level 0))
-          (with-temp-buffer
-            (insert full-content)
+          (org-roam-pi--with-org-buffer full-content
             (goto-char (point-min))
             (when (re-search-forward (format "^\*\\{1,%d\\} %s$" level (regexp-quote (org-roam-pi--node-title node))) nil t)
               (let ((start (point-marker)))
@@ -1031,9 +1041,7 @@ Returns a JSON string."
         (org-roam-pi--error (format "Could not read file: %s" file))
       (let ((org-id (org-roam-pi--generate-id))
             (tag-line (when tags (format ":ROAM_REFS: %s\n" (mapconcat #'identity tags " ")))))
-        (with-temp-buffer
-          (insert full-content)
-          (org-mode)
+        (org-roam-pi--with-org-buffer full-content
           (if (string= parent-title "")
               (progn
                 (goto-char (point-max))
@@ -1083,9 +1091,7 @@ Returns a JSON string."
          (full-content (org-roam-pi--read-file file)))
     (if (not full-content)
         (org-roam-pi--error (format "Could not read file: %s" file))
-      (with-temp-buffer
-        (insert full-content)
-        (org-mode)
+      (org-roam-pi--with-org-buffer full-content
         (let ((heading (org-roam-pi--find-heading title)))
           (if (not heading)
               (error "Entry not found: %s" title)

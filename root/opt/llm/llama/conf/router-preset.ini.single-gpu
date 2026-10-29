@@ -7,7 +7,7 @@ reasoning-budget = 2048
 reasoning-budget-message = " -- Reasoning budget exceeded, proceed to final answer."
 
 batch-size = 4096
-ubatch-size = 1024
+ubatch-size = 512
 
 temp = 1.0
 top-p = 0.95
@@ -19,9 +19,10 @@ jinja = true
 
 metrics = true
 
-spec-draft-threads = 22 
-
 kv-unified = true
+
+cache-type-k = q8_0
+cache-type-v = q8_0
 
 ngl = 999
 fa = on
@@ -40,3 +41,9 @@ top-p = 1.0
 top-k = 1
 min-p = 0.0
 repeat-penalty = 1.0
+
+[LFM2.5-24B-A2B]
+alias = alba-ai/LFM2.5-24B-A2B
+load-on-startup = true
+model = /var/lib/llm/models/llamacpp/LiquidAI/LFM2.5-24B-A2B-GGUF/LFM2.5-24B-A2B-QAD-Q4_0.gguf
+n-cpu-moe = 26

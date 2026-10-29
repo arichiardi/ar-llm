@@ -97,9 +97,10 @@ sudo ln -sfn ../../opt/llm/vllm/conf  root/etc/conf.d/vllm
 sudo rsync -a root/. /
 
 # Activate one variant per item: the fixed path is a symlink to the chosen
-# variant, the variants stay in the tree.
-sudo ln -sfn router-preset.ini.dual-gpu /etc/conf.d/llama/router-preset.ini
-sudo ln -sfn config-dual-3090.yaml      /etc/lact/config.yaml
+# variant, the variants stay in the tree. Router preset variants:
+# router-preset_3090x2.ini (dual 3090) and router-preset_4060.ini (single 4060).
+sudo ln -sfn router-preset_3090x2.ini /etc/conf.d/llama/router-preset.ini
+sudo ln -sfn config-dual-3090.yaml     /etc/lact/config.yaml
 
 # /opt/llm is shared: group-writable dirs, world-readable files, and only the
 # llm user/group may execute the bin/ helpers

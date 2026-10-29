@@ -1,16 +1,21 @@
 ---
 name: org-roam-adhoc-memory
-description: Query and modify the org-roam knowledge base. Use for searching notes, retrieving content, exploring links, traversing the graph, creating notes, or appending journal entries. All operations use bash scripts — never construct elisp manually.
+description: Query and modify the org-roam knowledge base. Use for searching notes, retrieving content, exploring links, traversing the graph, creating notes, or appending journal entries. All operations use bash scripts. Never construct elisp manually.
 compatibility: Requires bash, jq, and a running emacsclient with org-roam. The scripts load the bundled Elisp library (org-roam-adhoc-memory.el in the skill directory) and read config from ar-llm/org-roam-adhoc-memory.json.
 ---
 
 # Org-Roam Adhoc Memory
 
 Query and modify your org-roam zettelkasten via dedicated bash scripts.
-**Never construct elisp s-expressions yourself** — use the scripts below.
+**Never construct elisp s-expressions yourself.** Use the scripts below.
 
 All scripts return JSON on stdout. Errors return JSON on stderr with exit code 1.
 Pipe to `jq .` for readable output.
+
+**Wrap every script call in `timeout 30`.** Some calls decrypt `.org.gpg`
+files and can open a gpg passphrase dialog. Without a timeout, the call
+blocks until the user answers the dialog. See
+[GPG passphrase timeout](#gpg-passphrase-timeout-must).
 
 ## Sync (check first, ask before pulling)
 
@@ -41,11 +46,11 @@ repository. The pull is fast-forward only: it never rewrites local history.
 On failure (diverged branches, network error), do not retry with force
 flags. Report the error to the user and continue only when the user says to.
 
-## Errors (check this first when a script fails)
+## Errors (read before retrying a failure)
 
-All script failures return `{"error":"message"}` on stderr with exit code 1.
-Match the message to a category below and act. Never retry a failing command
-without a user response, except where stated.
+A failed script returns `{"error":"message"}` on stderr with exit code 1.
+Match the message to a category below. Then act. Never retry a failing
+command without a user response, except where stated.
 
 ### Temp file not visible to Emacs
 
@@ -54,27 +59,25 @@ without a user response, except where stated.
 ```
 
 The pi sandbox mounts a private `/tmp`. The script creates its working
-directory there, but the host Emacs server cannot see it.
+directory there. The host Emacs server cannot see that directory.
 
 - Do not retry.
-- Suggest to the user: set `ORG_ROAM_PI_MEMORY_TMPDIR` to a directory that is
-  visible to both the pi process and the Emacs server, for example:
+- Tell the user to set `ORG_ROAM_PI_MEMORY_TMPDIR` to a shared directory.
+  Use a directory that both the pi process and the Emacs server can see.
+
   ```bash
   export ORG_ROAM_PI_MEMORY_TMPDIR="$HOME/tmp"
   ```
 
 ### GPG passphrase timeout (MUST)
 
-Decrypting `.org.gpg` files can trigger a gpg passphrase dialog. The user may
-not be at the screen to answer it, so the call blocks indefinitely.
+Decrypting `.org.gpg` files can open a gpg passphrase dialog. The user can be
+away from the screen. The call then blocks until the user answers.
 
-- MUST wrap every script call in `timeout 30` (example below).
-- If the command exits with code 124 (timeout), the gpg dialog is probably
-  waiting for the user.
-- On timeout: do not retry. Tell the user that a gpg passphrase dialog is
-  open and ask when you can retry.
-- Retry only after the user confirms the dialog was answered or is ready to
-  answer it.
+- If the command exits with code 124, the dialog waits for the user.
+- On timeout, do not retry. Tell the user that a gpg passphrase dialog is
+  open. Ask when you can retry.
+- Retry only after the user confirms the dialog is answered or ready.
 
 ```bash
 timeout 30 scripts/retrieve.sh --id UUID
@@ -86,15 +89,15 @@ timeout 30 scripts/retrieve.sh --id UUID
 *ERROR*: GPG did not produce encrypted file
 ```
 
-or a `gpg:` error mentioning a missing key (`No public key`, `No secret key`).
+or a `gpg:` error that names a missing key (`No public key`, `No secret key`).
 
-Encryption runs gpg inside the Emacs server, using the `gpg-encrypt-to`
+Encryption runs gpg inside the Emacs server. It uses the `gpg-encrypt-to`
 recipients from the config file.
 
 - Do not retry.
-- Ask the user to check that the gpg key and agent are available in the Emacs
-  environment (`gpg -K`, `gpgconf --list-all`). Retry only after the user
-  confirms the key is available.
+- Ask the user to check the gpg key and agent in the Emacs environment.
+  Run `gpg -K` and `gpgconf --list-all`. Retry only after the user confirms
+  that the key is available.
 
 Scripts live at: `$PI_CODING_AGENT_DIR/skills/org-roam-adhoc-memory/scripts/` (default `~/.config/pi/agent/skills/org-roam-adhoc-memory/scripts/`).
 
@@ -107,7 +110,7 @@ scripts/search.sh "query" [max_results]
 Searches node titles, aliases, and properties. Defaults to 10 results.
 
 ```bash
-scripts/search.sh "project-x" 5
+timeout 30 scripts/search.sh "project-x" 5
 ```
 
 ## Retrieve
@@ -258,23 +261,3 @@ ORG_ROAM_PI_MEMORY_DEBUG=true scripts/search.sh "test"
 ```
 
 Log file paths are configured in `ar-llm/org-roam-adhoc-memory.json` under the `debug` key. Paths support `~` expansion.
-
-## Config
-
-All settings in `$PI_CODING_AGENT_DIR/ar-llm/org-roam-adhoc-memory.json` (default `~/.config/pi/agent/ar-llm/org-roam-adhoc-memory.json`). Example debug config using a temp directory:
-
-```json
-{
-  "debug": {
-    "log-file": "/tmp/org-roam-adhoc-memory-debug.log",
-    "context-file": "/tmp/org-roam-adhoc-memory-context.log"
-  }
-}
-```
-
-Use any writable temp directory, for example `/tmp` or `~/tmp`.
-
-- `log-file`: Debug log for the skill scripts and the Elisp library
-- `context-file`: Separate log for the full memory context output
-
-The Elisp library expands `~` with `expand-file-name`.

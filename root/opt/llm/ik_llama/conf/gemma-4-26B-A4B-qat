@@ -1,0 +1,71 @@
+# ik_llama.cpp - Gemma 4 26B-A4B IT QAT Q4_0 + QAT MTP assistant + vision
+#
+# Target card:    https://huggingface.co/google/gemma-4-26B-A4B-it-qat-q4_0-gguf
+# Assistant card: https://huggingface.co/ji-farthing/gemma-4-qat-q4_0-MTP-assistants-ik-llama-GGUF
+#
+# Matched QAT pair: target is Google's QAT Q4_0, assistant is Q4_0. Do not mix
+# with non-QAT targets. Assistant GGUF name on disk:
+#   gemma-4-26B-A4B-it-qat-q4_0-MTP-ik_llama-Q4_0.gguf   (321 MB)
+#
+# Hardware target: one RTX 4060 (8 GiB VRAM), 62 GiB RAM, one Xeon E5-2699 v4
+# (22 cores, 44 threads).
+#
+# Download (both repos):
+#   hfdownloader download google/gemma-4-26B-A4B-it-qat-q4_0-gguf \
+#     -F 'q4_0-it,mmproj' --local-dir /var/lib/llm/models/ik_llama
+#   hfdownloader download ji-farthing/gemma-4-qat-q4_0-MTP-assistants-ik-llama-GGUF \
+#     -F '26B-A4B' -E 'README' --local-dir /var/lib/llm/models/ik_llama
+#
+# VRAM math measured on this box (ik_llama build 5132, 8 GiB card):
+#   target: 31/31 layers "on GPU", but --n-cpu-moe 21 keeps 21 layers' experts
+#           in RAM. CUDA0 = 5179.53 MiB, CPU buffer = 9153.39 MiB.
+#           KV self = 839.38 MiB at -c 65536 with -ctk/-ctv q8_0.
+#           --swa-compress compacts 25/30 layers to 1536 rows.
+#   free VRAM after target load = 641 MiB.
+#   MTP assistant needs 1713 MiB (291 tensors + ~900 cache + 519 compute).
+#   21 was too tight: cudaMalloc failed allocating 519.49 MiB.
+#
+# 27 puts 27 layers' experts in RAM and 3 on GPU (6 more than 21), freeing
+# ~2.6 GiB (6 x ~436 MiB). Verified load at -c 65536 / n-cpu-moe 25:
+# CUDA0 = 3546.02 MiB, CPU buffer = 10786.89 MiB, KV self = 839.38 MiB.
+#
+# 128K context: --swa-compress pins 25/30 layers at 1536 rows, so only the 5
+# dense layers scale linearly. Target KV goes 839 MiB -> ~1.59 GiB
+# (+~750 MiB). The MTP draft reads the target KV directly and does not add
+# a full 128K cache. So 128K costs ~0.8 GiB more than 64K.
+#
+# If it OOMs on load: raise --n-cpu-moe to 27. KV is q5_1 (native FA kernel in
+# ik_llama, 5.0 bpw): 1072.50 MiB at 128K (measured 2026-10-30), ~655 MiB less
+# than q8_0. That funds one extra GPU expert layer (~408 MiB), so n-cpu-moe
+# is 26.
+# q4_0 crosses the same single-layer threshold at lower quality - no reason
+# to use it. Revert to q8_0 + n-cpu-moe 27 if long-context quality matters.
+#
+# --no-mmproj-offload keeps the 1.14 GiB vision encoder on the Xeon: zero VRAM
+# cost, image encode costs seconds per image. MTP + vision coexist; the draft
+# is text-side only. --swa-compress requires a single device.
+#
+# --- MoE expert cache (--moe-cache-mib): do not enable here -----------------
+# Needs ik_llama PR #2644 (commit 894191d6, build 5044+; installed 5132 has
+# it). It banks CPU-resident experts in VRAM and copies a missed expert over
+# PCIe before running it on the GPU. Only graphs of at most 32 tokens use the
+# bank, so prefill (-ub 512) never does. Measured on 2026-10-30, three runs:
+#   384 MiB, MTP on     -> 119 slots (3.4%), decode 0.8 tok/s
+#   1280 MiB, MTP off   -> 400 slots (11.6%), decode 0.13 tok/s
+#   1280 MiB, pinned    -> decode 0.21 tok/s
+# against the 29-31 tok/s baseline. One step moves ~650 MiB (216 experts x
+# 3.19 MiB), which at 0.21 tok/s is ~145 MB/s of host-to-device bandwidth.
+# At 29 tok/s the flag needs ~19 GB/s, so the bank size is not the problem,
+# and pinning the 11.33 GiB host buffer only buys 1.6x. Keep it off.
+#
+# For a 24 GiB 3090: set --n-cpu-moe 0, drop --moe-cache-mib and --swa-compress.
+#
+# Keep host buffers pageable: copies to VRAM stage through a bounce buffer
+# instead of direct DMA from locked pages.
+
+GGML_CUDA_NO_PINNED=1
+
+LLAMA_LOG_COLORS=1
+LLAMA_ARG_ENDPOINT_METRICS=1
+
+LLAMA_ARGS=--host 0.0.0.0 --port 11434 --alias alba-ai/gemma4-moe --model /var/lib/llm/models/ik_llama/google/gemma-4-26B-A4B-it-qat-q4_0-gguf/gemma-4-26B_q4_0-it.gguf --mmproj /var/lib/llm/models/ik_llama/google/gemma-4-26B-A4B-it-qat-q4_0-gguf/gemma-4-26B-it-mmproj.gguf --no-mmproj-offload -ngl 999 --n-cpu-moe 26 -fa on --swa-compress -c 131072 -b 2048 -ub 512 --ctx-checkpoints 16 -ctk q5_1 -ctv q5_1 -t 22 -tb 44 --no-mmap -rtr --jinja --spec-type mtp:n_max=2,p_min=0.0 -md /var/lib/llm/models/ik_llama/ji-farthing/gemma-4-qat-q4_0-MTP-assistants-ik-llama-GGUF/gemma-4-26B-A4B-it-qat-q4_0-MTP-ik_llama-Q4_0.gguf

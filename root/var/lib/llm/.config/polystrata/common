@@ -1,0 +1,12 @@
+# PolyStrata - settings shared by every instance.
+#
+# The run config is derived from the instance name by the unit:
+#   polystrata@gemma4  ->  %E/polystrata/gemma4.json
+# An optional per-instance file next to this one can override any of these.
+# The unit reads both as %E/polystrata/common and %E/polystrata/%i.
+
+STRATA_ENGINE=strata
+STRATA_DATA=/var/cache/polystrata
+STRATA_PORT=13434
+STRATA_ALLOWED_HOSTS=.albaforge.com
+STRATA_ARGS=

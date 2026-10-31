@@ -1,0 +1,103 @@
+#!/usr/bin/env bash
+# Copy the PolyStrata install into /opt/llm/polystrata on the live box.
+#
+# Run from the PolyStrata checkout. Everything else (the env presets, the run
+# configs, the bin wrappers, the unit) is maintained on the box by hand.
+#
+# The engine's build inputs are read from setup.py's own ENGINE_SOURCES and
+# VISION_SOURCES, so a change to the engine layout is picked up here. serve/ is
+# the server, data/ is read by path, tools/ holds the packer and tokenizer
+# scripts. Docs, benchmarks, tests, other platforms, the Windows scripts and
+# the git/docker files stay out.
+#
+# The copy runs as root and chowns the tree to the llm user, so both the llm
+# service and a setup run as llm can write it. --chmod keeps dirs 2775 and
+# files group-writable. The /var/lib/polystrata and /var/cache/polystrata
+# directories must exist. The env presets live in the llm user's XDG config
+# (%E/polystrata), not here.
+#
+# The copy uses no --delete: .venv/, engine/ and third_party/llama.cpp are
+# built in place by setup.sh and must survive a deploy. Run
+# /opt/llm/polystrata/setup.sh after a deploy to update the install.
+#
+# Usage: polystrata-deploy    (run from the PolyStrata checkout)
+set -euo pipefail
+
+# shellcheck source=/dev/null
+. ar-helpers.sh
+
+polystrata_src="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+
+if [ -z "${polystrata_src}" ]; then
+    echo "${0##*/}: not inside a git checkout" >&2
+    exit 2
+fi
+
+if [ ! -f "${polystrata_src}/polystrata.py" ]; then
+    echo "${0##*/}: ${polystrata_src} is not the PolyStrata checkout" >&2
+    exit 2
+fi
+
+# setup.py declares what the engine is compiled from. Read the two tuples with
+# ast so nothing in setup.py runs.
+engine_sources="$(
+    python3 - "${polystrata_src}/setup.py" <<'PY' || true
+import ast, sys
+
+names = {"ENGINE_SOURCES", "VISION_SOURCES"}
+for node in ast.parse(open(sys.argv[1], encoding="utf-8").read()).body:
+    if isinstance(node, ast.Assign) \
+            and isinstance(node.targets[0], ast.Name) \
+            and node.targets[0].id in names:
+        for path in ast.literal_eval(node.value):
+            print(path)
+PY
+)"
+
+if [ -z "${engine_sources}" ]; then
+    echo "${0##*/}: could not read ENGINE_SOURCES from setup.py" >&2
+    exit 2
+fi
+
+polystrata_dst=/opt/llm/polystrata
+service_user=llm
+echo_info "Copying ${polystrata_src} to ${polystrata_dst}"
+echo_info "  dirs:   serve tools data"
+echo_info "  engine: $(printf '%s ' ${engine_sources})"
+echo_info "  files:  setup.py setup.sh update.sh requirements.txt LICENSE"
+
+manifest="$(mktemp)"
+trap 'rm -f "${manifest}"' EXIT
+
+{
+    printf '%s\n' serve tools data
+    printf '%s\n' "${engine_sources}"
+} > "${manifest}"
+
+# sudo: --chown to llm needs root. The list is a file, so the sudo password is
+# not read from the pipe that would otherwise carry the file list.
+sudo rsync -rlptD \
+    --chown="${service_user}:${service_user}" \
+    --chmod=D2775,Fg+w \
+    --exclude='/.git*' \
+    --exclude='/.github/' \
+    --exclude='/Dockerfile' \
+    --exclude='/.dockerignore' \
+    --exclude='test_*.py' \
+    --exclude='__pycache__/' \
+    --files-from="${manifest}" \
+    "${polystrata_src}/" \
+    "${polystrata_dst}/"
+
+sudo rsync -rlptD \
+    --chown="${service_user}:${service_user}" \
+    --chmod=D2775,Fg+w \
+    "${polystrata_src}/setup.py" \
+    "${polystrata_src}/setup.sh" \
+    "${polystrata_src}/update.sh" \
+    "${polystrata_src}/requirements.txt" \
+    "${polystrata_src}/CMakeLists.txt" \
+    "${polystrata_src}/LICENSE" \
+    "${polystrata_dst}/"
+
+echo_ok "${0##*/}: done"

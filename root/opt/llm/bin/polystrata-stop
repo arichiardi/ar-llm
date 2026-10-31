@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [ $# -lt 1 ]; then
+    echo "${0##*/}: pass the instance name, e.g. ${0##*/} gemma4" >&2
+    exit 2
+fi
+
+env_name="${1##*/}"
+env_name="${env_name%.*}"
+
+llm-systemctl stop "polystrata@${env_name}"

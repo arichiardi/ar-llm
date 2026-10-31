@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# Run PolyStrata's installer with this box's directories pinned.
+#
+# setup.sh remembers --data-dir in settings.json but treats --models-dir as a
+# per-run flag, so without this wrapper every run has to repeat both. The GGUF
+# files go under the llm models tree next to the other backends; packs/ and
+# mtp/ stay in the cache directory the unit's EnvironmentFile names.
+#
+# The installer writes into the llm-owned tree and its virtualenv, so it runs
+# as the llm user (sudo when the caller is not), the same way llm-systemctl
+# does.
+#
+# Usage: polystrata-setup [setup.sh arguments...]
+set -euo pipefail
+
+STRATA_ROOT=/opt/llm/polystrata
+STRATA_DATA=/var/cache/polystrata
+STRATA_MODELS=/var/lib/llm/models/polystrata
+service_user=llm
+
+# shellcheck source=/dev/null
+. ar-helpers.sh
+
+echo_info "  data:   ${STRATA_DATA}"
+echo_info "  models: ${STRATA_MODELS}"
+
+cmd=("${STRATA_ROOT}/setup.sh"
+     --data-dir "${STRATA_DATA}"
+     --models-dir "${STRATA_MODELS}"
+     "$@")
+
+if [ "$(id -un)" = "${service_user}" ]; then
+    exec "${cmd[@]}"
+fi
+
+exec sudo -H -u "${service_user}" "${cmd[@]}"

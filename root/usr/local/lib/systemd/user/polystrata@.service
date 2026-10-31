@@ -1,0 +1,21 @@
+[Unit]
+Description=PolyStrata server (parameterized)
+After=syslog.target network.target local-fs.target remote-fs.target nss-lookup.target
+
+[Service]
+Type=simple
+WorkingDirectory=%E/polystrata
+EnvironmentFile=%E/polystrata/common
+EnvironmentFile=-%E/polystrata/%i
+ExecStart=/opt/llm/bin/polystrata-wrap --config %E/polystrata/%i.json $STRATA_ARGS
+ExecReload=/bin/kill -s HUP $MAINPID
+Restart=on-failure
+RestartSec=10
+KillSignal=SIGTERM
+TimeoutStopSec=120
+
+# kap
+SyslogIdentifier=%N
+
+[Install]
+WantedBy=multi-user.target

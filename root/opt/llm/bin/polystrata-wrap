@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# Launch the PolyStrata server from its virtualenv.
+#
+# The interpreter path is fixed. The engine and port come from the shared
+# EnvironmentFile (%E/polystrata/common); the run config is passed on
+# the command line, so the instance name in the unit selects the model.
+# STRATA_PORT is the only port source: the run config's own "port" field is
+# ignored (serve/server.py reads only "host" from it).
+#
+# Command-line options override the environment. Arguments after them go to
+# serve/server.py.
+#
+# Usage: polystrata-wrap --config PATH [--engine NAME] [--port N] [server args...]
+set -euo pipefail
+
+STRATA_ROOT=/opt/llm/polystrata
+STRATA_PY="${STRATA_ROOT}/.venv/bin/python"
+STRATA_SERVER="${STRATA_ROOT}/serve/server.py"
+
+STRATA_ENGINE="${STRATA_ENGINE:-strata}"
+STRATA_CONFIG="${STRATA_CONFIG:-}"
+STRATA_PORT="${STRATA_PORT:-}"
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --config) STRATA_CONFIG="$2"; shift 2 ;;
+        --engine) STRATA_ENGINE="$2"; shift 2 ;;
+        --port)   STRATA_PORT="$2"; shift 2 ;;
+        *) break ;;
+    esac
+done
+
+if [ -z "${STRATA_CONFIG}" ]; then
+    echo "${0##*/}: pass --config PATH or set STRATA_CONFIG" >&2
+    exit 2
+fi
+
+if [ -z "${STRATA_PORT}" ]; then
+    echo "${0##*/}: pass --port N or set STRATA_PORT" >&2
+    exit 2
+fi
+
+if [ ! -x "${STRATA_PY}" ]; then
+    echo "${0##*/}: virtualenv interpreter not found: ${STRATA_PY}" >&2
+    exit 1
+fi
+
+if [ ! -f "${STRATA_SERVER}" ]; then
+    echo "${0##*/}: server entry point not found: ${STRATA_SERVER}" >&2
+    exit 1
+fi
+
+exec "${STRATA_PY}" "${STRATA_SERVER}" \
+    --engine "${STRATA_ENGINE}" \
+    --config "${STRATA_CONFIG}" \
+    --port "${STRATA_PORT}" \
+    "$@"

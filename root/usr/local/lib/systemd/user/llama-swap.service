@@ -26,4 +26,4 @@ TimeoutStopSec=120
 SyslogIdentifier=%N
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=default.target

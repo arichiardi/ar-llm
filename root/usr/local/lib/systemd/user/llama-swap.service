@@ -1,0 +1,29 @@
+[Unit]
+Description=llama-swap model swapper (OpenAI and Anthropic proxy)
+Documentation=https://github.com/mostlygeek/llama-swap
+After=syslog.target network.target local-fs.target remote-fs.target nss-lookup.target
+
+[Service]
+Type=simple
+WorkingDirectory=%E/llama-swap
+EnvironmentFile=%E/llama-swap/common
+Environment=PATH=/opt/llm/bin:/usr/local/sbin:/usr/local/bin:/usr/bin:/bin
+# If llm-systemctl's systemctl --machine=llm@ --user cannot reach the bus from inside
+# this manager, add these two, with the real uid of llm, or fall back to plain
+# `systemctl --user` in the cmd lines:
+#   Environment=XDG_RUNTIME_DIR=/run/user/UID
+#   Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/UID/bus
+Environment=LACT_DAEMON_SOCKET_PATH=/run/lactd.sock
+
+ExecStart=/opt/llm/bin/llamaswap-wrap $LLAMA_SWAP_ARGS
+ExecReload=/bin/kill -s HUP $MAINPID
+Restart=on-failure
+RestartSec=10
+KillSignal=SIGTERM
+TimeoutStopSec=120
+
+# kap
+SyslogIdentifier=%N
+
+[Install]
+WantedBy=multi-user.target

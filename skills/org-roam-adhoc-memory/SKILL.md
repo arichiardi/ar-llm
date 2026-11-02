@@ -1,13 +1,33 @@
 ---
 name: org-roam-adhoc-memory
-description: Query and modify the org-roam knowledge base. Use for searching notes, retrieving content, exploring links, traversing the graph, creating notes, or appending journal entries. All operations use bash scripts. Never construct elisp manually.
+description: Query and modify the org-roam knowledge base. Use when the user asks what you know about a topic, to remember or add a note, to append a journal entry, or to search, read, link, or traverse existing notes. All operations use bash scripts. Never call org or org-roam functions directly and never construct elisp manually.
 compatibility: Requires bash, jq, and a running emacsclient with org-roam. The scripts load the bundled Elisp library (org-roam-adhoc-memory.el in the skill directory) and read config from ar-llm/org-roam-adhoc-memory.json.
 ---
 
 # Org-Roam Adhoc Memory
 
-Query and modify your org-roam zettelkasten via dedicated bash scripts.
-**Never construct elisp s-expressions yourself.** Use the scripts below.
+Act as a careful librarian of this vault: read before you write, and never
+invent structure.
+
+Query and modify your org-roam zettelkasten via the dedicated bash scripts
+below.
+
+**Never call `org`, `org-roam`, `org-id`, or `org-capture` functions
+directly** - not with `emacsclient`, not through the REPL, not by any other
+route. Never construct elisp s-expressions yourself. Every read and every
+write goes through the scripts. This keeps every node ID a standard UUID, so
+new nodes match the rest of the vault. If a script cannot do what you need,
+ask the user; do not reach for the underlying functions.
+
+```bash
+# Bad: bypasses the scripts, no UUID guarantee.
+emacsclient --eval '(org-id-get-create)'
+# Good: the supported path.
+scripts/create.sh "Title" "Content"
+```
+
+Scripts live at `$PI_CODING_AGENT_DIR/skills/org-roam-adhoc-memory/scripts/`
+(default `~/.config/pi/agent/skills/org-roam-adhoc-memory/scripts/`).
 
 All scripts return JSON on stdout. Errors return JSON on stderr with exit code 1.
 Pipe to `jq .` for readable output.
@@ -15,7 +35,67 @@ Pipe to `jq .` for readable output.
 **Wrap every script call in `timeout 30`.** Some calls decrypt `.org.gpg`
 files and can open a gpg passphrase dialog. Without a timeout, the call
 blocks until the user answers the dialog. See
-[GPG passphrase timeout](#gpg-passphrase-timeout-must).
+[GPG passphrase timeout](#gpg-passphrase-timeout).
+
+## How to work
+
+The scripts are independent building blocks. Combine them in any order the
+task needs; only two orderings are mandatory.
+
+1. Run `scripts/sync.sh --check` once at session start, before any other
+   call. See [Sync](#sync-check-first-ask-before-pulling).
+2. Read before you write. Locate the node, confirm its exact title or ID,
+   then write. After a write, verify it (see
+   [Verify a write](#verify-a-write)).
+
+Pick the script by intent:
+
+| Intent | Script |
+| --- | --- |
+| Find nodes by text | `search.sh` |
+| Read one node | `retrieve.sh` |
+| Neighbors of a node | `links.sh` |
+| Multi-hop neighborhood | `graph.sh` |
+| New file or top-level heading | `create.sh` |
+| Heading under an existing node | `add-child.sh` |
+| Rewrite an existing body | `edit-entry.sh` |
+| Journal entry for a date | `append-journal.sh` |
+| List all nodes | `list-nodes.sh` |
+
+Flows mix freely. For example, `search.sh` -> `retrieve.sh` -> `graph.sh` ->
+`retrieve.sh` to explore, or `search.sh` -> `retrieve.sh` ->
+`edit-entry.sh` -> `retrieve.sh` to change one body. There is no single
+required sequence beyond the two rules above.
+
+## Script output
+
+All scripts return JSON.
+
+`search.sh` and `list-nodes.sh` return an array of node objects:
+
+```jsonc
+{"title": "...", "id": "<uuid>", "file": "<path relative to roam dir>",
+ "level": 2, "todo": "", "priority": "", "tags": [], "aliases": [],
+ "refs": [], "properties": {}}
+```
+
+`retrieve.sh` returns one object:
+
+```jsonc
+{"title": "...", "file": "...", "content": "...", "truncated": false}
+```
+
+`links.sh` returns one object with neighbor arrays:
+
+```jsonc
+{"title": "...", "id": "<uuid>", "outgoing": [node, ...], "incoming": [node, ...]}
+```
+
+`graph.sh` returns an array of hop entries:
+
+```jsonc
+[{"title": "...", "id": "<uuid>", "hop": 0}]
+```
 
 ## Sync (check first, ask before pulling)
 
@@ -63,6 +143,21 @@ A failed script returns `{"error":"message"}` on stderr with exit code 1.
 Match the message to a category below. Then act. Never retry a failing
 command without a user response, except where stated.
 
+### Node or heading not found
+
+```
+*ERROR*: Node not found
+*ERROR*: Entry not found: <title>
+*ERROR*: Parent heading not found: <title>
+```
+
+The title or ID did not match anything.
+
+- Do not retry the same call unchanged.
+- Run `scripts/search.sh "query"` to find the node. Then run
+  `scripts/retrieve.sh --title "Title"` to read the exact title and ID.
+- Repeat the original call with the corrected title or ID.
+
 ### Temp file not visible to Emacs
 
 ```
@@ -80,7 +175,7 @@ directory there. The host Emacs server cannot see that directory.
   export ORG_ROAM_PI_MEMORY_TMPDIR="$HOME/tmp"
   ```
 
-### GPG passphrase timeout (MUST)
+### GPG passphrase timeout
 
 Decrypting `.org.gpg` files can open a gpg passphrase dialog. The user can be
 away from the screen. The call then blocks until the user answers.
@@ -110,8 +205,6 @@ recipients from the config file.
   Run `gpg -K` and `gpgconf --list-all`. Retry only after the user confirms
   that the key is available.
 
-Scripts live at: `$PI_CODING_AGENT_DIR/skills/org-roam-adhoc-memory/scripts/` (default `~/.config/pi/agent/skills/org-roam-adhoc-memory/scripts/`).
-
 ## Search
 
 ```bash
@@ -131,7 +224,8 @@ scripts/retrieve.sh --id UUID
 scripts/retrieve.sh --title "Title"
 ```
 
-Decrypts `.org.gpg` files transparently. Returns `title`, `file`, `content`.
+Decrypts `.org.gpg` files transparently. Returns `title`, `file`, `content`,
+`truncated`.
 
 ## Links
 
@@ -254,6 +348,19 @@ scripts/list-nodes.sh [max]
 ```
 
 Lists all nodes, capped at `max` (default 100).
+
+## Verify a write
+
+After any successful `create.sh`, `add-child.sh`, `edit-entry.sh`, or
+`append-journal.sh`, confirm the result before you report success:
+
+```bash
+timeout 30 scripts/retrieve.sh --id <returned-id>
+```
+
+The node must exist and its `:ID:` must be a UUID. For `edit-entry.sh`, run
+`retrieve.sh` first to confirm the exact title; the command fails with
+`Headline not found` on a mismatch.
 
 ## Error Handling
 

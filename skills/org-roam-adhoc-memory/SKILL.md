@@ -169,10 +169,11 @@ New top-level files use the file-level node template:
 #+AUTHOR: Andrea Richiardi
 ```
 
-> **ID format**: always use the org-id new format: 32 uppercase hex
-> characters, no dashes (e.g. `9B2463379F7A1FA07C4989C56021E923`). The
-> scripts generate this format. When you supply or reference an ID yourself,
-> match it. Never use dashed UUIDs, to avoid mixing formats in the vault.
+> **ID format**: IDs are standard org-id UUIDs: 36 lowercase hex characters
+> with dashes, in the 8-4-4-4-12 layout (e.g.
+> `9da3c48e-dd72-4a14-bd97-38e617cc9064`). The scripts generate this format.
+> Copy IDs verbatim from script output; never invent, shorten, or reformat
+> one.
 
 Notes added to an existing file become top-level `*` headings with their own `:ID:`.
 

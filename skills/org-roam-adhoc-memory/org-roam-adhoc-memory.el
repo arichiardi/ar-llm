@@ -603,12 +603,13 @@ Returns t on success, error string on failure."
 ;;;; Generate UUID for org IDs
 
 (defun org-roam-pi--generate-id ()
-  "Generate a 32-char uppercase hex ID suitable for org-roam."
-  (let ((hex "0123456789ABCDEF")
-        (chars '()))
-    (dotimes (_ 32)
-      (push (aref hex (random 16)) chars))
-    (concat (nreverse chars))))
+  "Generate a random version-4 UUID string for org IDs."
+  (let ((bytes (cl-loop repeat 16 collect (random 256))))
+    (setf (nth 6 bytes) (logior #x40 (logand (nth 6 bytes) #x0f)))
+    (setf (nth 8 bytes) (logior #x80 (logand (nth 8 bytes) #x3f)))
+    (apply #'format
+           "%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x"
+           bytes)))
 
 ;;;; Pick file for title (keyword matching)
 
@@ -638,9 +639,11 @@ Returns a file path string or nil."
 
 (defun org-roam-pi--resolve-target-file (target)
   "Resolve TARGET to an absolute file path.
-TARGET is a 32-char org ID or a file path (relative to the roam directory).
+TARGET is an org ID (dashed UUID) or a file path (relative to the roam directory).
 Signals an error when an ID does not match any node."
-  (if (string-match-p "^[0-9A-Fa-f]\\{32\\}$" target)
+  (if (string-match-p
+       "\\`\\([0-9A-Fa-f]\\{8\\}-[0-9A-Fa-f]\\{4\\}-[0-9A-Fa-f]\\{4\\}-[0-9A-Fa-f]\\{4\\}-[0-9A-Fa-f]\\{12\\}\\|[0-9A-Fa-f]\\{32\\}\\)\\'"
+       target)
       (let ((node (org-roam-pi--node-from-id target)))
         (if node
             (org-roam-pi--node-file node)

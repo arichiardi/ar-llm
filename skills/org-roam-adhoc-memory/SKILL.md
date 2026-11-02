@@ -248,10 +248,11 @@ Multi-hop BFS. `max_hops` is 1-3, defaults to 2.
 ## Create Note
 
 ```bash
-scripts/create.sh "Title" "Content" [--file PATH] [--tags TAG1 TAG2]
+scripts/create.sh "Title" "Content" [--file PATH] [--refs REF1 REF2]
 ```
 
 Auto-picks file path if `--file` omitted. Auto-encrypts to `.org.gpg`.
+Each `--refs` value is written to the node's `:ROAM_REFS:` property.
 
 New top-level files use the file-level node template:
 
@@ -280,7 +281,7 @@ Notes added to an existing file become top-level `*` headings with their own `:I
 ## Add Child Heading
 
 ```bash
-scripts/add-child.sh TARGET PARENT_TITLE CHILD_TITLE CONTENT [--tags TAG1 TAG2]
+scripts/add-child.sh TARGET PARENT_TITLE CHILD_TITLE CONTENT [--refs REF1 REF2]
 ```
 
 Inserts a new heading under an existing heading, in that heading's own file.
@@ -290,6 +291,7 @@ Use this to nest content under a node, or under a heading that has no ID.
 - `PARENT_TITLE` is the exact headline title to nest under. Use `""` to add a
   top-level heading at the end of the file.
 - The new heading gets its own ID and the level below the parent.
+- Each `--refs` value is written to the new heading's `:ROAM_REFS:` property.
 - The file is encrypted when it ends in `.org.gpg`.
 - Use `-` for list items in `CONTENT`. Lines that start with `*` are rejected.
 

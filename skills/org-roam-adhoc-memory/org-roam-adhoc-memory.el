@@ -938,11 +938,12 @@ Returns a JSON string."
         (org-roam-pi--json (nreverse results))))))
 
 ;;;###autoload
-(defun org-roam-pi-create (title content &optional file tags)
+(defun org-roam-pi-create (title content &optional file refs)
   "Create a new note in org-roam.
 TITLE is the node title, CONTENT is the body text.
 FILE is an optional target path (auto-picked if omitted).
-TAGS is an optional list of tag strings.
+REFS is an optional list of reference strings stored as a ROAM_REFS
+property.
 Returns a JSON string."
   (org-roam-pi--bootstrap)
   (let* ((target-file file)
@@ -962,7 +963,7 @@ Returns a JSON string."
         (setq target-file (expand-file-name target-file roam-dir)))
 
     (let* ((org-id (org-roam-pi--generate-id))
-           (tag-line (when tags (format ":ROAM_REFS: %s\n" (mapconcat #'identity tags " "))))
+           (ref-line (when refs (format ":ROAM_REFS: %s\n" (mapconcat #'identity refs " "))))
            (file-exists (file-exists-p target-file))
            (existing-content (and file-exists
                                   (org-roam-pi--read-file target-file)))
@@ -972,7 +973,7 @@ Returns a JSON string."
            ;; Append to existing file: top-level headline with its own ID
            (new-note-headline
             (format "* %s\n:PROPERTIES:\n:ID:       %s\n%s:END:\n\n%s\n"
-                    title org-id (or tag-line "") content))
+                    title org-id (or ref-line "") content))
            (combined (if file-exists
                          (concat existing-content "\n" new-note-headline "\n")
                        new-file-template)))
@@ -1043,12 +1044,12 @@ Returns a JSON string."
                               (file . ,(file-relative-name target-file org-roam-pi-directory))))))))
 
 ;;;###autoload
-(defun org-roam-pi-add-child (target parent-title child-title content &optional tags)
+(defun org-roam-pi-add-child (target parent-title child-title content &optional refs)
   "Insert a new heading titled CHILD-TITLE under an existing heading.
 TARGET is a node ID or a file path (relative to the roam directory).
 PARENT-TITLE is the exact headline title to nest under. Use \"\" to add
 a top-level heading at the end of the file. The new heading gets its own
-ID and the level below the parent. TAGS is an optional list of tag
+ID and the level below the parent. REFS is an optional list of reference
 strings stored as a ROAM_REFS property.
 Returns a JSON string."
   (org-roam-pi--bootstrap)
@@ -1059,7 +1060,7 @@ Returns a JSON string."
     (if (not full-content)
         (org-roam-pi--error (format "Could not read file: %s" file))
       (let ((org-id (org-roam-pi--generate-id))
-            (tag-line (when tags (format ":ROAM_REFS: %s\n" (mapconcat #'identity tags " ")))))
+            (ref-line (when refs (format ":ROAM_REFS: %s\n" (mapconcat #'identity refs " ")))))
         (org-roam-pi--with-org-buffer full-content
           (if (string= parent-title "")
               (progn
@@ -1067,7 +1068,7 @@ Returns a JSON string."
                 (unless (eolp) (insert "\n"))
                 (insert (concat "* " child-title "\n"
                                 ":PROPERTIES:\n:ID:       " org-id "\n"
-                                (or tag-line "")
+                                (or ref-line "")
                                 ":END:\n\n" content "\n")))
             (let ((parent (org-roam-pi--find-heading parent-title)))
               (if (not parent)
@@ -1078,7 +1079,7 @@ Returns a JSON string."
                                 (make-string (1+ (cdr parent)) ?\*)
                                 " " child-title "\n"
                                 ":PROPERTIES:\n:ID:       " org-id "\n"
-                                (or tag-line "")
+                                (or ref-line "")
                                 ":END:\n\n" content "\n"))))
           (let ((new-content (buffer-substring-no-properties (point-min) (point-max))))
             (let ((ok (org-roam-pi--save-file new-content file)))

@@ -22,7 +22,7 @@ cmake -B build \
       -DGGML_LTO=ON \
       -DGGML_RPC=ON \
       -DGGML_CUDA=ON \
-      -DCMAKE_CUDA_ARCHITECTURES="80;86;87" \
+      -DCMAKE_CUDA_ARCHITECTURES=native \
       -DLLAMA_BUILD_COMMIT="$(git rev-parse --short HEAD)" \
       -DGGML_NATIVE=ON \
       -Wno-dev

@@ -107,6 +107,64 @@ All Emacs operations go through `emacsclient` (never launch a bare `emacs`).
 
 Never use `clj-paren-repair` on `.el` files — that tool is for Clojure only.
 
+## llama-swap config conventions
+
+The llama-swap config drives model routing on the LLM box. The live file is
+`/opt/llm/conf/llama-swap/config.yaml`; the tracked copy is
+`root/opt/llm/conf/llama-swap/config.yaml`. Edit the live file, then mirror it
+back into the repo so the two stay byte-identical.
+
+Validate every change before it reaches the service:
+
+```bash
+llama-swap -config /opt/llm/conf/llama-swap/config.yaml -validate
+```
+
+The running service watches the file, so a valid edit reloads on save.
+
+### Model IDs
+
+- **Public IDs** name the models that clients call. Use the `alba-ai/<model>`
+  prefix for everything that serves out of this machine.
+- **Internal IDs** name one entry per engine. Use the engine prefix
+  `alba-<engine>/<model>`: `alba-llamacpp/...`, `alba-ikllama/...`,
+  `alba-polystrata/...`. Set `unlisted: true`; clients reach them only through
+  a profile pin.
+
+### Profiles
+
+The engines are mutually exclusive, so model sets are gated per profile:
+
+- Name each profile `alba-<engine>`.
+- Pin the engine's public IDs to the engine's internal IDs.
+- Disable every other engine's public IDs with a `~` (null) target.
+- `hooks.on_startup.profile` selects the profile at boot.
+
+```yaml
+profiles:
+  alba-llamacpp:
+    pins:
+      "alba-ai/LFM2.5-24B-A2B": "alba-llamacpp/LFM2.5-24B-A2B"
+      "alba-ai/LFM3-Omni-2B": "alba-llamacpp/LFM3-Omni-2B"
+      "alba-ai/gemma4-moe": ~
+  alba-ikllama:
+    pins:
+      "alba-ai/gemma4-moe": "alba-ikllama/gemma4-moe"
+      "alba-ai/LFM2.5-24B-A2B": ~
+      "alba-ai/LFM3-Omni-2B": ~
+```
+
+### Endpoint macros
+
+Name engine endpoints `local-<engine>` and give them the loopback URL:
+
+```yaml
+macros:
+  "local-llamacpp": http://127.0.0.1:10434
+  "local-ikllama": http://127.0.0.1:11434
+  "local-polystrata": http://127.0.0.1:13434
+```
+
 ## Adding a new extension
 
 1. Create `extensions/pi-<name>/src/<name>.ts`

@@ -21,9 +21,6 @@
 # Usage: polystrata-deploy    (run from the PolyStrata checkout)
 set -euo pipefail
 
-# shellcheck source=/dev/null
-. ar-helpers.sh
-
 polystrata_src="$(git rev-parse --show-toplevel 2>/dev/null || true)"
 
 if [ -z "${polystrata_src}" ]; then
@@ -59,10 +56,12 @@ fi
 
 polystrata_dst=/opt/polystrata
 
-echo_info "Copying ${polystrata_src} to ${polystrata_dst}"
-echo_info "  dirs:   serve tools data"
-echo_info "  engine: $(printf '%s ' ${engine_sources})"
-echo_info "  files:  setup.py setup.sh update.sh requirements.txt LICENSE"
+echo
+echo "Copying ${polystrata_src} to ${polystrata_dst}"
+echo "  dirs:   serve tools data"
+echo "  engine: $(printf '%s ' ${engine_sources})"
+echo "  files:  setup.py setup.sh update.sh requirements.txt LICENSE"
+echo
 
 manifest="$(mktemp)"
 trap 'rm -f "${manifest}"' EXIT
@@ -98,4 +97,5 @@ sudo rsync -rlptD \
     "${polystrata_src}/LICENSE" \
     "${polystrata_dst}/"
 
-echo_ok "${0##*/}: done"
+echo
+echo "${0##*/}: done"

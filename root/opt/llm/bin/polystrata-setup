@@ -18,11 +18,8 @@ STRATA_DATA=/var/cache/polystrata
 STRATA_MODELS=/var/lib/llm/models/polystrata
 service_user=llm
 
-# shellcheck source=/dev/null
-. ar-helpers.sh
-
-echo_info "  data:   ${STRATA_DATA}"
-echo_info "  models: ${STRATA_MODELS}"
+echo "  data:   ${STRATA_DATA}"
+echo "  models: ${STRATA_MODELS}"
 
 cmd=("${STRATA_ROOT}/setup.sh"
      --data-dir "${STRATA_DATA}"

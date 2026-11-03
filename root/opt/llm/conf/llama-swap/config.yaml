@@ -1,0 +1,106 @@
+# llama-swap config
+
+# Sixty seconds is enough for a router model that is already resident but still
+# reporting loading progress. It is also the worst case wait when an engine unit
+# is stopped, which is the price of not owning the process.
+healthCheckTimeout: 60
+
+# Never unload on idle. Unloading only kills a sleep process, so let the engines
+# manage their own residency.
+globalTTL: 0
+unloadTimeout: 10
+
+# Loading state goes into the reasoning field, so coding agents do not time out
+# while a router model warms up.
+sendLoadingState: true
+
+logLevel: info
+# Valid: proxy, upstream, http, both, none, or a comma separated list.
+logToStdout: proxy
+
+security:
+  cors:
+    allowedOrigins:
+      - "https://ai.albaforge.com"
+
+macros:
+  # The holder process. llama-swap needs a cmd; this one does nothing.
+  "hold": sleep infinity
+
+  # Engine endpoints on this box.
+  "llamacpp": http://127.0.0.1:10434
+  "ik-llama": http://127.0.0.1:11434
+  "polystrata": http://127.0.0.1:13434
+
+models:
+
+  ############ llama.cpp router, 10434 ############
+
+  "alba-ai/LFM2.5-24B-A2B":
+    name: "LFM2.5-24B-A2B QAD-Q4_0"
+    description: "LiquidAI MoE, llama.cpp router, resident at startup"
+    cmd: ${hold}
+    proxy: ${llamacpp}
+    # The engine is owned by its own unit, not by llama-swap, so do not
+    # wait on /health: mark ready and forward. A down engine then fails the
+    # request immediately instead of after healthCheckTimeout (60s).
+    checkEndpoint: none
+    # llama-server advertises keep-alive and closes after a streamed response
+    # (llama-swap issue #1205), which shows up as 502 proxy error: EOF on the
+    # next request. Do not pool connections to it.
+    disableKeepAlives: true
+    ttl: 0
+
+  "alba-ai/LFM3-Omni-2B":
+    name: "LFM3-Omni-2B BF16"
+    description: "LiquidAI omni 2B with vision, llama.cpp router"
+    cmd: ${hold}
+    proxy: ${llamacpp}
+    # The engine is owned by its own unit, not by llama-swap, so do not
+    # wait on /health: mark ready and forward. A down engine then fails the
+    # request immediately instead of after healthCheckTimeout (60s).
+    checkEndpoint: none
+    # llama-server advertises keep-alive and closes after a streamed response
+    # (llama-swap issue #1205), which shows up as 502 proxy error: EOF on the
+    # next request. Do not pool connections to it.
+    disableKeepAlives: true
+    ttl: 0
+
+  ############ Gemma 4 26B-A4B, one engine at a time ############
+  # One entry per engine, both unlisted. Clients use the public ID
+  # `alba-ai/gemma4-moe`, which the active profile pins to one of these. No
+  # checkEndpoint here, so llama-swap waits on the real /health before it
+  # forwards, which is what makes the profile trustworthy.
+
+  "ik/gemma4-moe":
+    name: "Gemma 4 MoE"
+    description: "Gemma 4 26B-A4B QAT q4_0 + MTP draft + vision (ik_llama)"
+    unlisted: true
+    cmd: ${hold}
+    proxy: ${ik-llama}
+    disableKeepAlives: true
+    ttl: 0
+
+  "ps/gemma4-moe":
+    name: "Gemma 4 MoE"
+    description: "Gemma 4 26B-A4B UD-Q3_K_M + vision (PolyStrata)"
+    unlisted: true
+    cmd: ${hold}
+    proxy: ${polystrata}
+    disableKeepAlives: true
+    ttl: 0
+
+# The public ID `alba-ai/gemma4-moe`. Switch the profile when you switch
+# engines; no client change:
+#   curl -X PUT http://127.0.0.1:20434/api/profiles/active -d '{"name":"ik"}'
+profiles:
+  ik:
+    pins:
+      "alba-ai/gemma4-moe": "ik/gemma4-moe"
+  ps:
+    pins:
+      "alba-ai/gemma4-moe": "ps/gemma4-moe"
+
+hooks:
+  on_startup:
+    profile: ps

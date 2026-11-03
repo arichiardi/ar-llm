@@ -1,0 +1,6 @@
+{
+ "data_dir": "/var/cache/polystrata",
+ "installs": [
+  "/opt/polystrata"
+ ]
+}

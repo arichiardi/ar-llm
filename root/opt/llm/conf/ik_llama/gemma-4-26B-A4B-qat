@@ -34,13 +34,6 @@
 # (+~750 MiB). The MTP draft reads the target KV directly and does not add
 # a full 128K cache. So 128K costs ~0.8 GiB more than 64K.
 #
-# If it OOMs on load: raise --n-cpu-moe to 27. KV is q5_1 (native FA kernel in
-# ik_llama, 5.0 bpw): 1072.50 MiB at 128K (measured 2026-10-30), ~655 MiB less
-# than q8_0. That funds one extra GPU expert layer (~408 MiB), so n-cpu-moe
-# is 26.
-# q4_0 crosses the same single-layer threshold at lower quality - no reason
-# to use it. Revert to q8_0 + n-cpu-moe 27 if long-context quality matters.
-#
 # --no-mmproj-offload keeps the 1.14 GiB vision encoder on the Xeon: zero VRAM
 # cost, image encode costs seconds per image. MTP + vision coexist; the draft
 # is text-side only. --swa-compress requires a single device.
@@ -57,8 +50,6 @@
 # 3.19 MiB), which at 0.21 tok/s is ~145 MB/s of host-to-device bandwidth.
 # At 29 tok/s the flag needs ~19 GB/s, so the bank size is not the problem,
 # and pinning the 11.33 GiB host buffer only buys 1.6x. Keep it off.
-#
-# For a 24 GiB 3090: set --n-cpu-moe 0, drop --moe-cache-mib and --swa-compress.
 #
 # Keep host buffers pageable: copies to VRAM stage through a bounce buffer
 # instead of direct DMA from locked pages.

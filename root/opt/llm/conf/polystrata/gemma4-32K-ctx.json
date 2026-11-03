@@ -1,0 +1,41 @@
+{
+ "exe": "/opt/polystrata/engine-poly/strata-poly",
+ "args": [
+  "--model",
+  "/var/lib/llm/models/polystrata/gemma4-UD-Q3_K_M/gemma-4-26B-A4B-it-UD-Q3_K_M.gguf",
+  "--max-context",
+  "32768",
+  "--expert-profile",
+  "/var/cache/polystrata/packs/gemma4-ud-q3_k_m/expert-profile.txt",
+  "--draft-model",
+  "/var/lib/llm/models/polystrata/gemma4-UD-Q3_K_M/mtp-gemma-4-26B-A4B-it-Q8_0.gguf",
+  "--conversation-cache-mib",
+  "auto"
+ ],
+ "cwd": "/opt/polystrata",
+ "tokenizer": "/var/cache/polystrata/packs/gemma4-ud-q3_k_m/tokenizer",
+ "model_name": "gemma-4-26b-a4b-ud-q3_k_m",
+ "display_name": "Gemma 4 26B-A4B UD-Q3_K_M",
+ "log": "/opt/polystrata/strata-gemma4-ud-q3_k_m.log",
+ "lib_dirs": [
+  "/opt/cuda/bin",
+  "/opt/cuda/lib64"
+ ],
+ "port": 13434,
+ "gpu": 0,
+ "gpus_asked": true,
+ "open_browser": false,
+ "vision": {
+  "exe": "/opt/polystrata/engine-poly/strata-vision",
+  "mmproj": "/var/lib/llm/models/polystrata/gemma4-UD-Q3_K_M/mmproj-F16.gguf",
+  "model": "/var/lib/llm/models/polystrata/gemma4-UD-Q3_K_M/gemma-4-26B-A4B-it-UD-Q3_K_M.gguf",
+  "gpu": false,
+  "max_tokens": 300,
+  "threads": 22
+ },
+ "parallel": 2,
+ "aliases": [
+  "alba-ai/gemma4-moe"
+ ],
+ "fit_max_tokens": true
+}

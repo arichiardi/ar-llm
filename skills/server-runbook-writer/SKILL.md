@@ -52,6 +52,9 @@ These override any conflicting guidance below.
    - Target paths for binaries, configs, and unit files
    - Where custom systemd user units live, and whether any remain in the legacy
      `%E/systemd/user/`
+   - Whether any service runs as a container (Podman quadlet); if so, its
+     quadlet directory, its instance name, and the service account whose UID
+     owns it
    - Group write: whether any file or directory must be writable by a group,
      and which group must write it
    - Constraints: maintenance window, downtime, and rollback budget
@@ -148,6 +151,45 @@ Rules that follow:
   operator does not ask for it, use an owner-only mode.
 - State the reason next to the mode, so a later editor does not "tidy" it away.
 
+## Container units (Podman quadlets)
+
+A `.container`, `.network`, `.build`, `.pod`, `.kube`, `.volume`, or `.artifact`
+file is a quadlet. The Podman generator reads it at
+`systemctl {--user} daemon-reload` and writes a matching `.service`. systemd
+itself does not read `.container` files.
+
+Rules:
+
+- Never put a quadlet in `/usr/local/lib/systemd/user/`, `%E/systemd/user/`, or
+  `/etc/conf.d/`. The generator does not search those paths, so the service
+  never appears.
+- Rootful quadlets live in `/run/containers/systemd/`,
+  `/etc/containers/systemd/`, or `/usr/share/containers/systemd/`.
+- Rootless quadlets live in `$XDG_CONFIG_HOME/containers/systemd/` (usually
+  `~/.config/containers/systemd/`), in `/etc/containers/systemd/users/` for
+  every rootless user, or in `/etc/containers/systemd/users/${UID}` for one
+  user.
+- Derive the UID from the service account. Never write a literal UID into a
+  runbook; it leaks a host fact and breaks on a box where the account differs.
+  Use `id -u <service>`:
+  ```bash
+  uid=$(id -u <service>)
+  sudo install -d "/etc/containers/systemd/users/${uid}"
+  ```
+- A quadlet `EnvironmentFile` is an absolute path read when the unit is
+  generated. It may name the `/etc/conf.d/<svc>` link or the real config
+  directory; match the path the file actually contains. Point it at the new
+  config directory, quote the path so the UID expands, then reload:
+  ```bash
+  sudo sed -i 's#\(/etc/conf\.d/<svc>\|<old-config-dir>\)#<config-dir>#g' \
+    "/etc/containers/systemd/users/${uid}/<unit>@.container"
+  systemctl --user daemon-reload
+  ```
+- Quadlets cannot drop privileges with `User=`, `Group=`, or `DynamicUser=`. Run
+  them rootless, or use the container `UserNS=` option instead.
+- After a reload, confirm the generated unit exists before you start it:
+  `systemctl --user list-unit-files '<name>@*'`.
+
 ## Guidelines for writing effective runbooks
 
 1. Clarity and precision
@@ -204,6 +246,8 @@ Rules that follow:
 - Omitting important details.
 - Using undefined terminology.
 - Destructive steps without a rollback.
+- Placing a quadlet in a systemd unit directory (`/usr/local/lib/systemd/user/`,
+  `%E/systemd/user/`) or in `/etc/conf.d/`.
 
 ## Self-check before you deliver
 
@@ -215,5 +259,7 @@ Rules that follow:
 - [ ] Every phase names its rollback.
 - [ ] The stop-signs table has an exact rollback per row.
 - [ ] No `sudo -u <service>` remains.
+- [ ] No literal UID is written; a quadlet path derives it with
+      `id -u <service>`.
 - [ ] Staged file paths are absolute.
 - [ ] The TODO checklist matches the phase headings.

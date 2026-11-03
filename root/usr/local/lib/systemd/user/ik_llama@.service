@@ -1,11 +1,13 @@
 [Unit]
 Description=ik_llama.cpp server (parameterized)
+StartLimitIntervalSec=1m
+StartLimitBurst=5
 After=syslog.target network.target local-fs.target remote-fs.target nss-lookup.target
 
 [Service]
 Type=simple
 Environment=LD_LIBRARY_PATH=/opt/ik_llama/lib
-EnvironmentFile=/etc/conf.d/ik_llama/%i
+EnvironmentFile=/opt/llm/conf/ik_llama/%i
 ExecStart=/opt/ik_llama/bin/llama-server $LLAMA_ARGS
 ExecReload=/bin/kill -s HUP $MAINPID
 Restart=on-failure

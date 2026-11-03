@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Copy the PolyStrata install into /opt/llm/polystrata on the live box.
+# Copy the PolyStrata install into /opt/polystrata on the live box.
 #
 # Run from the PolyStrata checkout. Everything else (the env presets, the run
 # configs, the bin wrappers, the unit) is maintained on the box by hand.
@@ -13,12 +13,10 @@
 # The copy runs as root and chowns the tree to the llm user, so both the llm
 # service and a setup run as llm can write it. --chmod keeps dirs 2775 and
 # files group-writable. The /var/lib/polystrata and /var/cache/polystrata
-# directories must exist. The env presets live in the llm user's XDG config
-# (%E/polystrata), not here.
 #
 # The copy uses no --delete: .venv/, engine/ and third_party/llama.cpp are
 # built in place by setup.sh and must survive a deploy. Run
-# /opt/llm/polystrata/setup.sh after a deploy to update the install.
+# /opt/polystrata/setup.sh after a deploy to update the install.
 #
 # Usage: polystrata-deploy    (run from the PolyStrata checkout)
 set -euo pipefail
@@ -59,8 +57,8 @@ if [ -z "${engine_sources}" ]; then
     exit 2
 fi
 
-polystrata_dst=/opt/llm/polystrata
-service_user=llm
+polystrata_dst=/opt/polystrata
+
 echo_info "Copying ${polystrata_src} to ${polystrata_dst}"
 echo_info "  dirs:   serve tools data"
 echo_info "  engine: $(printf '%s ' ${engine_sources})"
@@ -77,7 +75,7 @@ trap 'rm -f "${manifest}"' EXIT
 # sudo: --chown to llm needs root. The list is a file, so the sudo password is
 # not read from the pipe that would otherwise carry the file list.
 sudo rsync -rlptD \
-    --chown="${service_user}:${service_user}" \
+    --chown=llm:llm \
     --chmod=D2775,Fg+w \
     --exclude='/.git*' \
     --exclude='/.github/' \
@@ -90,7 +88,7 @@ sudo rsync -rlptD \
     "${polystrata_dst}/"
 
 sudo rsync -rlptD \
-    --chown="${service_user}:${service_user}" \
+    --chown=llm:llm \
     --chmod=D2775,Fg+w \
     "${polystrata_src}/setup.py" \
     "${polystrata_src}/setup.sh" \

@@ -1,16 +1,16 @@
 [Unit]
 Description=llama.cpp server (router mode)
 StartLimitIntervalSec=1m
-StartLimitBurst=10000
+StartLimitBurst=5
 After=syslog.target network.target local-fs.target remote-fs.target nss-lookup.target
 
 [Service]
 Type=simple
-Environment=LD_LIBRARY_PATH=/opt/llama.cpp/lib
-EnvironmentFile=/etc/conf.d/llama/common
-ExecStart=/opt/llama.cpp/bin/llama-server
+Environment=LD_LIBRARY_PATH=/opt/llamacpp/lib
+EnvironmentFile=/opt/llm/conf/llamacpp/common
+ExecStart=/opt/llamacpp/bin/llama-server
 ExecReload=/bin/kill -s HUP $MAINPID
-Restart=never
+Restart=no
 StandardOutput=journal
 StandardError=journal
 

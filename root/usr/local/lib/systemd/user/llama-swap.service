@@ -5,14 +5,9 @@ After=syslog.target network.target local-fs.target remote-fs.target nss-lookup.t
 
 [Service]
 Type=simple
-WorkingDirectory=%E/llama-swap
-EnvironmentFile=%E/llama-swap/common
+WorkingDirectory=/opt/llm/conf/llama-swap
+EnvironmentFile=/opt/llm/conf/llama-swap/common
 Environment=PATH=/opt/llm/bin:/opt/nvidia/bin:/usr/local/sbin:/usr/local/bin:/usr/bin:/bin
-# If llm-systemctl's systemctl --machine=llm@ --user cannot reach the bus from inside
-# this manager, add these two, with the real uid of llm, or fall back to plain
-# `systemctl --user` in the cmd lines:
-#   Environment=XDG_RUNTIME_DIR=/run/user/UID
-#   Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/UID/bus
 Environment=LACT_DAEMON_SOCKET_PATH=/run/lactd.sock
 
 ExecStart=/opt/llm/bin/llamaswap-wrap $LLAMA_SWAP_ARGS

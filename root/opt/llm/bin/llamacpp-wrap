@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Wrapper for llama.cpp binaries installed to /opt/llama.cpp by llamacpp-build.
+# Wrapper for llama.cpp binaries installed to /opt/llamacpp by llamacpp-build.
 # Fixes "cannot open shared object file" by adding the lib/ dir to
 # LD_LIBRARY_PATH.
 #
@@ -10,7 +10,7 @@
 # (covers rpc-server, ggml-rpc-server, llama).
 set -euo pipefail
 
-LLAMA_ROOT="/opt/llama.cpp"
+LLAMA_ROOT="/opt/llamacpp"
 if [ $# -lt 1 ]; then
     echo "usage: ${0##*/} <tool> [args...]" >&2
     echo "tools:" >&2

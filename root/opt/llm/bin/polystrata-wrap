@@ -2,7 +2,7 @@
 # Launch the PolyStrata server from its virtualenv.
 #
 # The interpreter path is fixed. The engine and port come from the shared
-# EnvironmentFile (%E/polystrata/common); the run config is passed on
+# EnvironmentFile (/opt/llm/conf/polystrata/common); the run config is passed on
 # the command line, so the instance name in the unit selects the model.
 # STRATA_PORT is the only port source: the run config's own "port" field is
 # ignored (serve/server.py reads only "host" from it).
@@ -13,7 +13,7 @@
 # Usage: polystrata-wrap --config PATH [--engine NAME] [--port N] [server args...]
 set -euo pipefail
 
-STRATA_ROOT=/opt/llm/polystrata
+STRATA_ROOT=/opt/polystrata
 STRATA_PY="${STRATA_ROOT}/.venv/bin/python"
 STRATA_SERVER="${STRATA_ROOT}/serve/server.py"
 

@@ -13,7 +13,7 @@
 # Usage: polystrata-setup [setup.sh arguments...]
 set -euo pipefail
 
-STRATA_ROOT=/opt/llm/polystrata
+STRATA_ROOT=/opt/polystrata
 STRATA_DATA=/var/cache/polystrata
 STRATA_MODELS=/var/lib/llm/models/polystrata
 service_user=llm

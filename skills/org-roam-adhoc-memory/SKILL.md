@@ -59,6 +59,8 @@ Pick the script by intent:
 | New file or top-level heading | `create.sh` |
 | Heading under an existing node | `add-child.sh` |
 | Rewrite an existing body | `edit-entry.sh` |
+| Rename a heading | `rename.sh` |
+| Set or clear aliases | `alias.sh` |
 | Journal entry for a date | `append-journal.sh` |
 | List all nodes | `list-nodes.sh` |
 
@@ -134,8 +136,9 @@ If the pull succeeds but the database refresh fails, report both parts. The
 queries stay stale until the database sync succeeds.
 
 `scripts/db-sync.sh` refreshes the database only and leaves git alone. Run
-it after `create.sh`, `append-journal.sh`, `add-child.sh`, or
-`edit-entry.sh`, because those write files but do not index them.
+it after `create.sh`, `append-journal.sh`, `add-child.sh`,
+`edit-entry.sh`, `rename.sh`, or `alias.sh`, because those write files but
+do not index them.
 
 ## Errors (read before retrying a failure)
 
@@ -325,6 +328,43 @@ scripts/edit-entry.sh life.org.gpg "KeePass Password Safe" "KeePass stores all p
 
 The command fails with `Headline not found` when no heading has that title.
 Use `retrieve.sh` first to confirm the title.
+
+## Rename Entry
+
+```bash
+scripts/rename.sh TARGET TITLE NEW_TITLE
+```
+
+Changes the headline title of an existing heading, in that heading's own
+file. The heading level, its property drawer and its ID stay unchanged, so
+backlinks by ID keep working.
+
+- `TARGET` is a node ID or a node file path (relative to the roam directory).
+- `TITLE` is the exact current headline title.
+- `NEW_TITLE` must be a single non-empty line.
+- The title changes only; the body and any subheadings stay as they are.
+
+```bash
+scripts/rename.sh linux.org.gpg "Media server" "albatros"
+```
+
+## Set Aliases
+
+```bash
+scripts/alias.sh TARGET TITLE ALIASES
+```
+
+Sets the `ROAM_ALIASES` property of an existing heading, or removes it when
+`ALIASES` is empty. Aliases are alternative titles: `search.sh` and
+`retrieve.sh` match them.
+
+- `TARGET` is a node ID or a node file path (relative to the roam directory).
+- `TITLE` is the exact current headline title.
+- `ALIASES` is a comma-separated string; pass `""` to clear the property.
+
+```bash
+scripts/alias.sh linux.org.gpg "albatros" "Media server"
+```
 
 ## Append Journal
 

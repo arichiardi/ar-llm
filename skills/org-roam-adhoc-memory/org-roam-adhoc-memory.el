@@ -1061,34 +1061,35 @@ Returns a JSON string."
         (org-roam-pi--error (format "Could not read file: %s" file))
       (let ((org-id (org-roam-pi--generate-id))
             (ref-line (when refs (format ":ROAM_REFS: %s\n" (mapconcat #'identity refs " ")))))
-        (org-roam-pi--with-org-buffer full-content
-          (if (string= parent-title "")
-              (progn
-                (goto-char (point-max))
-                (unless (eolp) (insert "\n"))
-                (insert (concat "* " child-title "\n"
-                                ":PROPERTIES:\n:ID:       " org-id "\n"
-                                (or ref-line "")
-                                ":END:\n\n" content "\n")))
-            (let ((parent (org-roam-pi--find-heading parent-title)))
-              (if (not parent)
-                  (error "Parent heading not found: %s" parent-title)
-                (goto-char (car parent))
-                (org-end-of-subtree t t)
-                (insert (concat "\n"
-                                (make-string (1+ (cdr parent)) ?\*)
-                                " " child-title "\n"
-                                ":PROPERTIES:\n:ID:       " org-id "\n"
-                                (or ref-line "")
-                                ":END:\n\n" content "\n"))))
-          (let ((new-content (buffer-substring-no-properties (point-min) (point-max))))
-            (let ((ok (org-roam-pi--save-file new-content file)))
-              (if (not ok)
-                  ok
-                (org-roam-pi--json `((status . "added")
-                                      (title . ,child-title)
-                                      (id . ,org-id)
-                                      (file . ,(file-relative-name file org-roam-pi-directory)))))))))))))
+        (let ((new-content
+               (org-roam-pi--with-org-buffer full-content
+                 (if (string= parent-title "")
+                     (progn
+                       (goto-char (point-max))
+                       (unless (eolp) (insert "\n"))
+                       (insert (concat "* " child-title "\n"
+                                       ":PROPERTIES:\n:ID:       " org-id "\n"
+                                       (or ref-line "")
+                                       ":END:\n\n" content "\n")))
+                   (let ((parent (org-roam-pi--find-heading parent-title)))
+                     (if (not parent)
+                         (error "Parent heading not found: %s" parent-title)
+                       (goto-char (car parent))
+                       (org-end-of-subtree t t)
+                       (insert (concat "\n"
+                                       (make-string (1+ (cdr parent)) ?\*)
+                                       " " child-title "\n"
+                                       ":PROPERTIES:\n:ID:       " org-id "\n"
+                                       (or ref-line "")
+                                       ":END:\n\n" content "\n")))))
+                 (buffer-substring-no-properties (point-min) (point-max)))))
+          (let ((ok (org-roam-pi--save-file new-content file)))
+            (if (not ok)
+                ok
+              (org-roam-pi--json `((status . "added")
+                                    (title . ,child-title)
+                                    (id . ,org-id)
+                                    (file . ,(file-relative-name file org-roam-pi-directory)))))))))))
 
 (defun org-roam-pi--count-stars (line)
   "Return the number of leading * characters in LINE."
@@ -1140,6 +1141,67 @@ Returns a JSON string."
                       (org-roam-pi--json `((status . "edited")
                                             (title . ,title)
                                             (file . ,(file-relative-name file org-roam-pi-directory)))))))))))))))
+
+;;;###autoload
+(defun org-roam-pi-rename (target title new-title)
+  "Rename the heading titled TITLE to NEW-TITLE in the file of TARGET.
+TARGET is a node ID or a file path (relative to the roam directory).
+The heading level, its property drawer and its ID stay unchanged. NEW-TITLE
+must be a single non-empty line. Returns a JSON string."
+  (org-roam-pi--bootstrap)
+  (org-roam-pi--dbg (format "rename target=%s title=%s new-title=%s" target title new-title))
+  (when (or (string-empty-p new-title) (string-match-p "[\n\r]" new-title))
+    (error "new title must be a single non-empty line"))
+  (let* ((file (org-roam-pi--resolve-target-file target))
+         (full-content (org-roam-pi--read-file file)))
+    (if (not full-content)
+        (org-roam-pi--error (format "Could not read file: %s" file))
+      (org-roam-pi--with-org-buffer full-content
+        (let ((heading (org-roam-pi--find-heading title)))
+          (if (not heading)
+              (error "Entry not found: %s" title)
+            (goto-char (car heading))
+            (org-edit-headline new-title)
+            (let ((new-content (buffer-substring-no-properties (point-min) (point-max))))
+              (let ((ok (org-roam-pi--save-file new-content file)))
+                (if (not ok)
+                    ok
+                  (org-roam-pi--json `((status . "renamed")
+                                        (title . ,new-title)
+                                        (file . ,(file-relative-name file org-roam-pi-directory)))))))))))))
+
+;;;###autoload
+(defun org-roam-pi-set-aliases (target title aliases)
+  "Set the ROAM_ALIASES property of the heading titled TITLE.
+TARGET is a node ID or a file path (relative to the roam directory).
+ALIASES is a comma-separated string; an empty string removes the property.
+Returns a JSON string."
+  (org-roam-pi--bootstrap)
+  (org-roam-pi--dbg (format "set-aliases target=%s title=%s aliases=%s" target title aliases))
+  (let ((names (seq-remove #'string-empty-p
+                           (mapcar #'string-trim (split-string (or aliases "") "," t)))))
+    (let* ((file (org-roam-pi--resolve-target-file target))
+           (full-content (org-roam-pi--read-file file)))
+      (if (not full-content)
+          (org-roam-pi--error (format "Could not read file: %s" file))
+        (org-roam-pi--with-org-buffer full-content
+          (let ((heading (org-roam-pi--find-heading title)))
+            (if (not heading)
+                (error "Entry not found: %s" title)
+              (goto-char (car heading))
+              (if names
+                  ;; org-roam reads the value with `split-string-and-unquote':
+                  ;; aliases are space-separated and quoted when they hold a space
+                  (org-set-property "ROAM_ALIASES" (mapconcat (lambda (a) (format "%S" a)) names " "))
+                (org-delete-property "ROAM_ALIASES"))
+              (let ((new-content (buffer-substring-no-properties (point-min) (point-max))))
+                (let ((ok (org-roam-pi--save-file new-content file)))
+                  (if (not ok)
+                      ok
+                    (org-roam-pi--json `((status . "aliases-set")
+                                          (title . ,title)
+                                          (aliases . ,names)
+                                          (file . ,(file-relative-name file org-roam-pi-directory))))))))))))))
 
 (defun org-roam-pi--build-entry-neighborhood ()
   "Build entry node neighborhood section.

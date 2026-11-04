@@ -7,8 +7,11 @@
 # The engine's build inputs are read from setup.py's own ENGINE_SOURCES and
 # VISION_SOURCES, so a change to the engine layout is picked up here. serve/ is
 # the server, data/ is read by path, tools/ holds the packer and tokenizer
-# scripts. Docs, benchmarks, tests, other platforms, the Windows scripts and
-# the git/docker files stay out.
+# scripts. Docs, benchmarks, other platforms, the Windows scripts and the
+# git/docker files stay out. tests/ comes along because of a CMakeLists.txt
+# bug: dma_batch_parity is gated on CUDA only, not on STRATA_BUILD_TESTS, so
+# tests/core/dma_batch_parity.cu must be present to configure.
+# See https://github.com/simplexai-labs/PolyStrata/issues/124
 #
 # The copy runs as root and chowns the tree to the llm user, so both the llm
 # service and a setup run as llm can write it. --chmod keeps dirs 2775 and
@@ -69,6 +72,9 @@ trap 'rm -f "${manifest}"' EXIT
 {
     printf '%s\n' serve tools data
     printf '%s\n' "${engine_sources}"
+    # CMakeLists.txt needs tests/core/dma_batch_parity.cu to configure
+    # (see the note at the top; simplexai-labs/PolyStrata#124)
+    printf '%s\n' tests
 } > "${manifest}"
 
 # sudo: --chown to llm needs root. The list is a file, so the sudo password is

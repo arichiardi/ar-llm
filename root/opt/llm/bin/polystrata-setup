@@ -6,9 +6,9 @@
 # files go under the llm models tree next to the other backends; packs/ and
 # mtp/ stay in the cache directory the unit's EnvironmentFile names.
 #
-# The installer writes into the llm-owned tree and its virtualenv, so it runs
-# as the llm user (sudo when the caller is not), the same way llm-systemctl
-# does.
+# User-agnostic: it runs as whoever invokes it, and never switches user. Run
+# it as the account that owns the install tree, e.g.
+#   sudo -u llm -H /opt/llm/bin/polystrata-setup --family glm --model ...
 #
 # Usage: polystrata-setup [setup.sh arguments...]
 set -euo pipefail
@@ -16,18 +16,11 @@ set -euo pipefail
 STRATA_ROOT=/opt/polystrata
 STRATA_DATA=/var/cache/polystrata
 STRATA_MODELS=/var/lib/llm/models/polystrata
-service_user=llm
 
 echo "  data:   ${STRATA_DATA}"
 echo "  models: ${STRATA_MODELS}"
 
-cmd=("${STRATA_ROOT}/setup.sh"
-     --data-dir "${STRATA_DATA}"
-     --models-dir "${STRATA_MODELS}"
-     "$@")
-
-if [ "$(id -un)" = "${service_user}" ]; then
-    exec "${cmd[@]}"
-fi
-
-exec sudo -H -u "${service_user}" "${cmd[@]}"
+exec "${STRATA_ROOT}/setup.sh" \
+     --data-dir "${STRATA_DATA}" \
+     --models-dir "${STRATA_MODELS}" \
+     "$@"

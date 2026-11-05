@@ -1,0 +1,26 @@
+# llama-swap base: settings and macros shared by every host fragment.
+
+# Never unload on idle. Unloading only kills a sleep process, so let the engines
+# manage their own residency.
+globalTTL: 0
+unloadTimeout: 10
+
+sendLoadingState: true
+
+logLevel: info
+# Valid: proxy, upstream, http, both, none, or a comma separated list.
+logToStdout: proxy
+
+security:
+  cors:
+    allowedOrigins:
+      - "https://ai.albaforge.com"
+
+macros:
+  # The holder process. llama-swap needs a cmd; this one does nothing.
+  "hold": sleep infinity
+
+  "local-llamacpp": http://127.0.0.1:10434
+  "local-ikllama": http://127.0.0.1:11434
+  "local-polystrata": http://127.0.0.1:13434
+  "puffin-polystrata": http://puffin.home.arpa:13434

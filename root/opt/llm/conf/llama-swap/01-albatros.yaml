@@ -1,44 +1,13 @@
-# llama-swap config
-
-# Sixty seconds is enough for a router model that is already resident but still
-# reporting loading progress. It is also the worst case wait when an engine unit
-# is stopped, which is the price of not owning the process.
-healthCheckTimeout: 60
-
-# Never unload on idle. Unloading only kills a sleep process, so let the engines
-# manage their own residency.
-globalTTL: 0
-unloadTimeout: 10
-
-# Loading state goes into the reasoning field, so coding agents do not time out
-# while a router model warms up.
-sendLoadingState: true
-
-logLevel: info
-# Valid: proxy, upstream, http, both, none, or a comma separated list.
-logToStdout: proxy
-
-security:
-  cors:
-    allowedOrigins:
-      - "https://ai.albaforge.com"
-
-macros:
-  # The holder process. llama-swap needs a cmd; this one does nothing.
-  "hold": sleep infinity
-
-  # Engine endpoints on this box.
-  "local-llamacpp": http://127.0.0.1:10434
-  "local-ikllama": http://127.0.0.1:11434
-  "local-polystrata": http://127.0.0.1:13434
+# llama-swap fragment: albatros (this host) engines.
+# Loaded after 00-base.yaml, which defines the macros used here.
 
 models:
 
   ############ llama.cpp router, 10434 ############
   # One entry per model, both unlisted. Clients use the public IDs
   # `alba-ai/LFM2.5-24B-A2B` and `alba-ai/LFM3-Omni-2B`, which the active
-  # profile pins to these. No checkEndpoint here, so llama-swap forwards at
-  # once instead of waiting on the real /health.
+  # profile pins to these. useModelName sends the public alias upstream, since
+  # the pin rewrote it to the internal ID.
 
   "alba-llamacpp/LFM2.5-24B-A2B":
     name: "LFM2.5-24B-A2B QAD-Q4_0"
@@ -46,6 +15,7 @@ models:
     unlisted: true
     cmd: ${hold}
     proxy: ${local-llamacpp}
+    useModelName: alba-ai/LFM2.5-24B-A2B
     # The engine is owned by its own unit, not by llama-swap, so do not
     # wait on /health: mark ready and forward. A down engine then fails the
     # request immediately instead of after healthCheckTimeout (60s).
@@ -62,6 +32,7 @@ models:
     unlisted: true
     cmd: ${hold}
     proxy: ${local-llamacpp}
+    useModelName: alba-ai/LFM3-Omni-2B
     # The engine is owned by its own unit, not by llama-swap, so do not
     # wait on /health: mark ready and forward. A down engine then fails the
     # request immediately instead of after healthCheckTimeout (60s).
@@ -74,9 +45,9 @@ models:
 
   ############ Gemma 4 26B-A4B, one engine at a time ############
   # One entry per engine, both unlisted. Clients use the public ID
-  # `alba-ai/gemma4-moe`, which the active profile pins to one of these. No
-  # checkEndpoint here, so llama-swap waits on the real /health before it
-  # forwards, which is what makes the profile trustworthy.
+  # `alba-ai/gemma4-moe`, which the active profile pins to one of these. Do not
+  # wait on /health: the engine is owned by its own unit, not by llama-swap, so
+  # a stopped or loading engine fails the request at once instead of waiting.
 
   "alba-ikllama/gemma4-moe":
     name: "Gemma 4 MoE"
@@ -84,6 +55,7 @@ models:
     unlisted: true
     cmd: ${hold}
     proxy: ${local-ikllama}
+    checkEndpoint: none
     disableKeepAlives: true
     ttl: 0
 
@@ -93,6 +65,7 @@ models:
     unlisted: true
     cmd: ${hold}
     proxy: ${local-polystrata}
+    checkEndpoint: none
     disableKeepAlives: true
     ttl: 0
 

@@ -16,8 +16,8 @@
 set -euo pipefail
 
 : "${LLAMA_SWAP_BIN:?LLAMA_SWAP_BIN is not set}"
-: "${LLAMA_SWAP_CONFIG:?LLAMA_SWAP_CONFIG is not set}"
 : "${LLAMA_SWAP_LISTEN:?LLAMA_SWAP_LISTEN is not set}"
+: "${LLAMA_SWAP_CONFIG_DIR:?LLAMA_SWAP_CONFIG_DIR is not set}"
 : "${LLAMA_SWAP_WATCH_CONFIG:?LLAMA_SWAP_WATCH_CONFIG is not set}"
 
 if [ ! -x "${LLAMA_SWAP_BIN}" ]; then
@@ -25,12 +25,12 @@ if [ ! -x "${LLAMA_SWAP_BIN}" ]; then
     exit 1
 fi
 
-if [ ! -f "${LLAMA_SWAP_CONFIG}" ]; then
-    echo "${0##*/}: config not found: ${LLAMA_SWAP_CONFIG}" >&2
+if [ ! -d "${LLAMA_SWAP_CONFIG_DIR}" ]; then
+    echo "${0##*/}: config dir not found: ${LLAMA_SWAP_CONFIG_DIR}" >&2
     exit 1
 fi
 
-args=("-config" "${LLAMA_SWAP_CONFIG}" "-listen" "${LLAMA_SWAP_LISTEN}")
+args=("-config-dir" "${LLAMA_SWAP_CONFIG_DIR}" "-listen" "${LLAMA_SWAP_LISTEN}")
 
 case "$(printf '%s' "${LLAMA_SWAP_WATCH_CONFIG}" | tr '[:upper:]' '[:lower:]')" in
     true|1|yes|on) args+=("-watch-config=true") ;;
@@ -39,7 +39,7 @@ esac
 
 # Fail fast on a broken config, instead of crash-looping the service.
 if ! validate_out="$("${LLAMA_SWAP_BIN}" -validate "${args[@]}" 2>&1)"; then
-    echo "${0##*/}: config failed validation: ${LLAMA_SWAP_CONFIG}" >&2
+    echo "${0##*/}: config failed validation: ${LLAMA_SWAP_CONFIG_DIR}" >&2
     printf '%s\n' "${validate_out}" >&2
     exit 1
 fi

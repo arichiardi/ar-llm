@@ -109,27 +109,41 @@ Never use `clj-paren-repair` on `.el` files — that tool is for Clojure only.
 
 ## llama-swap config conventions
 
-The llama-swap config drives model routing on the LLM box. The live file is
-`/opt/llm/conf/llama-swap/config.yaml`; the tracked copy is
-`root/opt/llm/conf/llama-swap/config.yaml`. Edit the live file, then mirror it
-back into the repo so the two stay byte-identical.
+The llama-swap config drives model routing on the LLM box. It is split into
+`00-`-numbered fragments next to `common`. The live directory is
+`/opt/llm/conf/llama-swap/`; the tracked copy is
+`root/opt/llm/conf/llama-swap/`. Edit the live files, then mirror them back into
+the repo so the two stay byte-identical. Only `*.yaml`/`*.yml` files are read,
+so `common` is ignored by the loader.
+
+Fragments load in filename order and merge: mappings recurse, sequences append,
+and a repeated scalar or a repeated identity-map key (`models`, `profiles`, ...)
+is a hard error. Keep each model and profile in exactly one fragment. Current
+split:
+
+- `00-base.yaml` - global settings, CORS, and macros for every host.
+- `01-albatros.yaml` - this host's engines, models, profiles, and startup hook.
+- `02-puffin.yaml` - the remote puffin engine (not yet present).
 
 Validate every change before it reaches the service:
 
 ```bash
-llama-swap -config /opt/llm/conf/llama-swap/config.yaml -validate
+llama-swap -validate -config-dir /opt/llm/conf/llama-swap
 ```
 
-The running service watches the file, so a valid edit reloads on save.
+The running service watches the config directory, so a valid edit reloads on
+save.
 
 ### Model IDs
 
-- **Public IDs** name the models that clients call. Use the `alba-ai/<model>`
-  prefix for everything that serves out of this machine.
-- **Internal IDs** name one entry per engine. Use the engine prefix
-  `alba-<engine>/<model>`: `alba-llamacpp/...`, `alba-ikllama/...`,
-  `alba-polystrata/...`. Set `unlisted: true`; clients reach them only through
-  a profile pin.
+- **Public IDs** name the logical models that clients call. Use the
+  `alba-ai/<model>` prefix for every model this llama-swap exposes, whatever
+  the backend host. The public ID is stable; its backend can move.
+- **Internal IDs** name one entry per engine. Use the host prefix
+  `alba-<engine>/<model>` for the local box (`alba-llamacpp/...`,
+  `alba-ikllama/...`, `alba-polystrata/...`) and `puf-<engine>/<model>` for
+  puffin (`puf-polystrata/...`). Set `unlisted: true`; clients reach them only
+  through a profile pin.
 
 ### Profiles
 
@@ -156,13 +170,16 @@ profiles:
 
 ### Endpoint macros
 
-Name engine endpoints `local-<engine>` and give them the loopback URL:
+Name engine endpoints `local-<engine>` for this host and give them the loopback
+URL. Name a remote host's engine `<host>-<engine>` and use its DNS name. Every
+macro lives in `00-base.yaml` so each fragment can reference it:
 
 ```yaml
 macros:
   "local-llamacpp": http://127.0.0.1:10434
   "local-ikllama": http://127.0.0.1:11434
   "local-polystrata": http://127.0.0.1:13434
+  "puffin-polystrata": http://puffin.home.arpa:13434
 ```
 
 ## Adding a new extension

@@ -1,7 +1,10 @@
 # llama-swap - settings shared by every start
 
 LLAMA_SWAP_BIN=/usr/bin/llama-swap
-LLAMA_SWAP_CONFIG=/opt/llm/conf/llama-swap/config.yaml
+
+# Config is a directory of fragments, merged in filename order.
+LLAMA_SWAP_CONFIG_DIR=/opt/llm/conf/llama-swap
+
 LLAMA_SWAP_LISTEN=127.0.0.1:20434
 LLAMA_SWAP_WATCH_CONFIG=true
 

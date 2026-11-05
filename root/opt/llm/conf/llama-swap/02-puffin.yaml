@@ -4,16 +4,14 @@
 models:
 
   ############ PolyStrata on puffin, 13434 ############
-  # Unlisted, like the albatros engines. Clients can call the internal ID
-  # directly, or reach a public ID once a puffin profile pins it.
+  # Public ID, always listed. useModelName sends the engine's own model name.
 
-  "puf-polystrata/glm-5.3-flash":
-    name: "GLM 5.3 Flash REAP50"
+  "alba-ai/glm-5.3-flash":
+    name: "GLM-5.3-Flash"
     description: "GLM 5.3 Flash REAP50-Q3_K_M, 12.5B active, text only (PolyStrata)"
-    unlisted: true
     cmd: ${hold}
     proxy: ${puffin-polystrata}
-    useModelName: alba-ai/glm-5.3-flash
+    useModelName: glm-5.3-flash-reap50-q3_k_m
     # puffin is a separate host whose engine llama-swap does not own or start,
     # so do not wait on /health: forward the first request instead. A down or
     # loading engine then fails at once with a connection error, not after
@@ -22,10 +20,3 @@ models:
     checkEndpoint: none
     disableKeepAlives: true
     ttl: 0
-
-# Public ID `alba-ai/glm-5.3-flash` is enabled only while this profile is active:
-#   curl -X PUT http://127.0.0.1:20434/api/profiles/active -d '{"name":"puf-polystrata"}'
-profiles:
-  puf-polystrata:
-    pins:
-      "alba-ai/glm-5.3-flash": "puf-polystrata/glm-5.3-flash"

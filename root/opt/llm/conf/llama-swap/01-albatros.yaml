@@ -4,18 +4,14 @@
 models:
 
   ############ llama.cpp router, 10434 ############
-  # One entry per model, both unlisted. Clients use the public IDs
-  # `alba-ai/LFM2.5-24B-A2B` and `alba-ai/LFM3-Omni-2B`, which the active
-  # profile pins to these. useModelName sends the public alias upstream, since
-  # the pin rewrote it to the internal ID.
+  # Public IDs, always listed. useModelName sends the engine's own model name.
 
-  "alba-llamacpp/LFM2.5-24B-A2B":
-    name: "LFM2.5-24B-A2B QAD-Q4_0"
-    description: "LiquidAI MoE, llama.cpp router, resident at startup"
-    unlisted: true
+  "alba-ai/LFM2.5-24B-A2B":
+    name: "LFM2.5-24B-A2B"
+    description: "LiquidAI MoE QAD-Q4_0, llama.cpp router, resident at startup"
     cmd: ${hold}
     proxy: ${local-llamacpp}
-    useModelName: alba-ai/LFM2.5-24B-A2B
+    useModelName: LFM2.5-24B-A2B
     # The engine is owned by its own unit, not by llama-swap, so do not
     # wait on /health: mark ready and forward. A down engine then fails the
     # request immediately instead of after healthCheckTimeout (60s).
@@ -26,13 +22,12 @@ models:
     disableKeepAlives: true
     ttl: 0
 
-  "alba-llamacpp/LFM3-Omni-2B":
-    name: "LFM3-Omni-2B BF16"
-    description: "LiquidAI omni 2B with vision, llama.cpp router"
-    unlisted: true
+  "alba-ai/LFM3-Omni-2B":
+    name: "LFM3-Omni-2B"
+    description: "LiquidAI omni 2B BF16 with vision, llama.cpp router"
     cmd: ${hold}
     proxy: ${local-llamacpp}
-    useModelName: alba-ai/LFM3-Omni-2B
+    useModelName: LFM3-Omni-2B
     # The engine is owned by its own unit, not by llama-swap, so do not
     # wait on /health: mark ready and forward. A down engine then fails the
     # request immediately instead of after healthCheckTimeout (60s).
@@ -44,10 +39,9 @@ models:
     ttl: 0
 
   ############ Gemma 4 26B-A4B, one engine at a time ############
-  # One entry per engine, both unlisted. Clients use the public ID
-  # `alba-ai/gemma4-moe`, which the active profile pins to one of these. Do not
-  # wait on /health: the engine is owned by its own unit, not by llama-swap, so
-  # a stopped or loading engine fails the request at once instead of waiting.
+  # One entry per engine, both unlisted. `alba-ai/gemma4-moe` is a profile pin.
+  # Do not wait on /health: the engine is owned by its own unit, not by
+  # llama-swap, so a stopped or loading engine fails at once instead of waiting.
 
   "alba-ikllama/gemma4-moe":
     name: "Gemma 4 MoE"
@@ -69,26 +63,14 @@ models:
     disableKeepAlives: true
     ttl: 0
 
-# Public IDs: `alba-ai/LFM2.5-24B-A2B`, `alba-ai/LFM3-Omni-2B` and
-# `alba-ai/gemma4-moe`. The three engines are mutually exclusive, so each
-# profile enables its own models and disables the others. Switch the profile
-# when you switch engines; no client change:
+# Only `alba-ai/gemma4-moe` switches engine with the profile.
 #   curl -X PUT http://127.0.0.1:20434/api/profiles/active -d '{"name":"alba-polystrata"}'
 profiles:
-  alba-llamacpp:
-    pins:
-      "alba-ai/LFM2.5-24B-A2B": "alba-llamacpp/LFM2.5-24B-A2B"
-      "alba-ai/LFM3-Omni-2B": "alba-llamacpp/LFM3-Omni-2B"
-      "alba-ai/gemma4-moe": ~
   alba-ikllama:
     pins:
-      "alba-ai/LFM2.5-24B-A2B": ~
-      "alba-ai/LFM3-Omni-2B": ~
       "alba-ai/gemma4-moe": "alba-ikllama/gemma4-moe"
   alba-polystrata:
     pins:
-      "alba-ai/LFM2.5-24B-A2B": ~
-      "alba-ai/LFM3-Omni-2B": ~
       "alba-ai/gemma4-moe": "alba-polystrata/gemma4-moe"
 
 hooks:

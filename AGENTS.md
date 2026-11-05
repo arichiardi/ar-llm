@@ -139,33 +139,38 @@ save.
 - **Public IDs** name the logical models that clients call. Use the
   `alba-ai/<model>` prefix for every model this llama-swap exposes, whatever
   the backend host. The public ID is stable; its backend can move.
-- **Internal IDs** name one entry per engine. Use the host prefix
-  `alba-<engine>/<model>` for the local box (`alba-llamacpp/...`,
-  `alba-ikllama/...`, `alba-polystrata/...`) and `puf-<engine>/<model>` for
-  puffin (`puf-polystrata/...`). Set `unlisted: true`; clients reach them only
-  through a profile pin.
+- A model with one engine is a plain listed model: use its public ID as the
+  model key. Set `useModelName` to the engine's own model name.
+- **Internal IDs** exist only for a public name that must switch between
+  mutually exclusive engines. Use the host prefix `alba-<engine>/<model>` for
+  the local box (`alba-ikllama/...`, `alba-polystrata/...`) and
+  `puf-<engine>/<model>` for puffin. Set `unlisted: true`; clients reach them
+  only through a profile pin.
+
+### Model names
+
+- Keep `name` canonical and dash-separated, with no spaces (for example
+  `GLM-5.3-Flash`, not `GLM 5.3 Flash`).
+- Drop the variant and quantization tag from `name`.
+- Put the variant, quantization and engine detail in `description`.
 
 ### Profiles
 
-The engines are mutually exclusive, so model sets are gated per profile:
+A profile switches a public name between mutually exclusive engines. Only such
+names need a profile: everything else stays listed under any active profile.
 
 - Name each profile `alba-<engine>`.
-- Pin the engine's public IDs to the engine's internal IDs.
-- Disable every other engine's public IDs with a `~` (null) target.
+- Pin the switched public ID to the engine's internal ID.
 - `hooks.on_startup.profile` selects the profile at boot.
 
 ```yaml
 profiles:
-  alba-llamacpp:
-    pins:
-      "alba-ai/LFM2.5-24B-A2B": "alba-llamacpp/LFM2.5-24B-A2B"
-      "alba-ai/LFM3-Omni-2B": "alba-llamacpp/LFM3-Omni-2B"
-      "alba-ai/gemma4-moe": ~
   alba-ikllama:
     pins:
       "alba-ai/gemma4-moe": "alba-ikllama/gemma4-moe"
-      "alba-ai/LFM2.5-24B-A2B": ~
-      "alba-ai/LFM3-Omni-2B": ~
+  alba-polystrata:
+    pins:
+      "alba-ai/gemma4-moe": "alba-polystrata/gemma4-moe"
 ```
 
 ### Endpoint macros

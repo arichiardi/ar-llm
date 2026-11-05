@@ -28,9 +28,10 @@ irreversible. Work on a clone, never on the live working repository.
 
 Do this before any other action.
 
-1. Ask the user where to put the backup and the cleaned clone. This is
-   required before any file is written. If the user does not choose, default
-   to `${TMPDIR:-/tmp}`.
+1. Ask the user for a reliable path for the backup and the cleaned clone.
+   This is required before any file is written. Ask for a path that survives
+   a reboot, because the mirror is the only full copy after the rewrite. If
+   the user does not choose, default to `${TMPDIR:-/tmp}`.
    ```shell
    WORKDIR="${TMPDIR:-/tmp}"   # or the path the user chose
    ```
@@ -91,10 +92,11 @@ Do this before any other action.
 ## Phase 2 - Decide
 
 - **Obsolete path** (not in HEAD, user confirms): purge it from all history.
-- **`secrets/`**: truncate to the last 1 year by author date.
-- **Key or GPG backups** (for example `keys/`): keep. Old encrypted files in
+- **`<secret-dir>`**: truncate to the last 1 year by author date.
+- **Key or GPG backups** (for example `<keys-dir>`): keep. Old encrypted files in
   history need the old subkeys. Ask before removing.
 - Report measured sizes for each option. Do not guess.
+- Replace `<secret-dir>` and `<keys-dir>` with the real directory names.
 
 ## Phase 3 - Rewrite in a clone
 
@@ -108,7 +110,7 @@ git filter-repo --force --prune-empty always \
   --commit-callback "
 ts = float(commit.author_date.split()[0])
 if ts < $CUT:
-    commit.file_changes = [fc for fc in commit.file_changes if not fc.filename.startswith(b'secrets/')]
+    commit.file_changes = [fc for fc in commit.file_changes if not fc.filename.startswith(b'<secret-dir>/')]
 "
 git remote add origin <original-url>
 ```
@@ -116,11 +118,14 @@ git remote add origin <original-url>
 Notes:
 
 - `filter-repo` removes `origin`; restore it.
-- The commit callback drops changes to `secrets/` older than the cutover.
+- The commit callback drops changes to `<secret-dir>` older than the cutover.
   Commits that only touched those files become empty and disappear.
 - Add one `--path` for each obsolete path. `--invert-paths` removes them.
 - The callback runs per commit with `commit` in scope. Do not define a
   function; write the body directly.
+- Every rewrite changes the commit hash, so `filter-repo` drops each GPG
+  signature. The rewritten history is unsigned. Re-sign the commits when the
+  project enforces signing.
 
 ## Phase 4 - Verify
 
@@ -139,22 +144,43 @@ Notes:
    ```
 4. Current secret files still present:
    ```shell
-   git ls-tree -r -l HEAD -- secrets
+   git ls-tree -r -l HEAD -- <secret-dir>
    ```
 5. No leftovers: no shallow file, no replace refs, only the expected refs.
 
 ## Phase 5 - Push (needs explicit confirmation)
 
-Force-push rewrites the remote. Ask once, then run:
+Force-push rewrites the remote. Ask once. Record the remote value and check
+for pull refs first:
 
 ```shell
-git push --force origin <branch>
+git ls-remote origin
+git ls-remote origin refs/heads/<branch>
+```
+
+`filter-repo` removes `origin`; re-adding it leaves no remote-tracking ref,
+so a bare `--force-with-lease` fails. Assert the old value explicitly:
+
+```shell
+OLD=$(git ls-remote origin refs/heads/<branch> | cut -f1)
+git push --force-with-lease=<branch>:"$OLD" origin <branch>
+```
+
+Then clone the pushed remote and measure the result. The cleaned clone may
+keep the original pack, so `du -sh .git` there overstates the size.
+
+```shell
+git clone <url> "$WORKDIR/<repo>-reclone"
+du -sh "$WORKDIR/<repo>-reclone/.git"
 ```
 
 Tell the user:
 
-- Other clones and forks keep the old objects until deleted and re-cloned.
-- GitHub may retain unreachable objects. Contact support to purge them.
+- Other clones and forks keep the old objects until they are deleted and
+  re-cloned.
+- A GitHub pull ref, `refs/pull/<N>/head`, pins the old commit and blocks
+  garbage collection. Close or delete the pull request to release the
+  objects. GitHub may keep unreachable objects until then.
 - Every commit hash changes.
 
 ## Reporting

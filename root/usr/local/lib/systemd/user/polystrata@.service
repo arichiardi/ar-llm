@@ -2,7 +2,6 @@
 Description=PolyStrata server (parameterized)
 StartLimitIntervalSec=1m
 StartLimitBurst=5
-After=syslog.target network.target local-fs.target remote-fs.target nss-lookup.target
 
 [Service]
 Type=simple
@@ -20,4 +19,4 @@ TimeoutStopSec=120
 SyslogIdentifier=%N
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=default.target

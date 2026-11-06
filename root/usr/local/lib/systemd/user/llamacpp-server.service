@@ -2,7 +2,6 @@
 Description=llama.cpp server (router mode)
 StartLimitIntervalSec=1m
 StartLimitBurst=5
-After=syslog.target network.target local-fs.target remote-fs.target nss-lookup.target
 
 [Service]
 Type=simple
@@ -22,4 +21,4 @@ MemoryDenyWriteExecute=true
 NoNewPrivileges=true
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=default.target

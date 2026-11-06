@@ -20,3 +20,16 @@ models:
     checkEndpoint: none
     disableKeepAlives: true
     ttl: 0
+
+  "alba-ai/qwen3.8-flash-next":
+    name: "Qwen3.8-Flash-Next"
+    description: "Qwen3.8-Flash-Next IQ3_S, 2-part split GGUF, image + text (PolyStrata)"
+    cmd: ${hold}
+    proxy: ${puffin-polystrata}
+    useModelName: qwen38-flash-next-IQ3_S
+    modalities: [image]
+    # Same as above: puffin runs the engine, so forward at once and do not
+    # pool connections to a PolyStrata that closes after each stream.
+    checkEndpoint: none
+    disableKeepAlives: true
+    ttl: 0

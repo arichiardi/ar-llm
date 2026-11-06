@@ -18,8 +18,8 @@ Pipeline to audit a photo collection for images that do not belong:
 
 - **structural stage** — free, EXIF-based: flags screenshots/imports
   (`NO_MAKE`), duplicates, unreadable files;
-- **vision stage** — a local vision LLM (llama.cpp `llama-server --mmproj`,
-  OpenAI-compatible API) writes one short semantic description per image so
+- **vision stage** — a local vision LLM server (OpenAI-compatible API)
+  writes one short semantic description per image so
   the user can eyeball the batch for misfiles (a jacket in a vacation month,
   a stranger in a family album);
 - **review stage** — a larger, vision-capable LLM runs two sub-passes on
@@ -219,7 +219,7 @@ never touched). **Remove them (`--clean`) before running
 ## Operational notes
 
 - **Throttle**: set `SKILL_PICS_VISION_TRIAGE_CONCURRENCY` to the
-  llama-server's `--parallel` — going higher just queues on the server (no
+  server's concurrency limit — going higher just queues (no
   speedup, only extra CPU from the per-image downscale); `--concurrency`
   overrides per run. The script retries with backoff on 5xx/timeouts. Empty-content replies are treated as failures (a reasoning
   model that burns its budget on `reasoning_content` returns empty

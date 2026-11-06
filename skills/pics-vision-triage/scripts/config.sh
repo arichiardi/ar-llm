@@ -3,7 +3,7 @@
 # Existing environment variables win; the values below are fallbacks.
 # CLI flags (--url, --model, ...) still override everything.
 
-# OpenAI-compatible base URL of the vision LLM server (llama-server --mmproj)
+# OpenAI-compatible base URL of the vision LLM server
 export SKILL_PICS_VISION_TRIAGE_URL="${SKILL_PICS_VISION_TRIAGE_URL:-http://localhost:8123/v1}"
 
 # Bearer token for the vision server; empty = no Authorization header sent.
@@ -39,7 +39,7 @@ export SKILL_PICS_VISION_TRIAGE_CONTEXT_MODEL="${SKILL_PICS_VISION_TRIAGE_CONTEX
 # run overrides it with --concurrency.
 export SKILL_PICS_VISION_TRIAGE_CONCURRENCY="${SKILL_PICS_VISION_TRIAGE_CONCURRENCY:-1}"
 
-# Sampling tweaks (llama-server OpenAI-compatible body fields).
+# Sampling tweaks (OpenAI-compatible body fields).
 # Uncomment and set to override the built-in defaults (temperature 0,
 # max_tokens 512; everything else off).
 # Reference: https://docs.liquid.ai/deployment/on-device/llama-cpp#generation-parameters

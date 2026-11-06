@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Vision stage: vision-LLM triage of photos via an OpenAI-compatible server
-# (llama.cpp llama-server with --mmproj). Read-only; writes JSONL audit logs.
+# Vision stage: vision-LLM triage of photos via an OpenAI-compatible server.
+# Read-only; writes JSONL audit logs.
 # Sees the WHOLE list/directory — not just what the structural stage flagged.
 #
 # Subcommands:

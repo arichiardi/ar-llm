@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-llm-systemctl stop llama-server
+llm-systemctl stop llamacpp-server

@@ -62,10 +62,10 @@ root/
 │   ├── bin/                                 # llama.cpp / vLLM wrapper scripts
 │   ├── chat-templates/                      # .jinja chat templates
 │   ├── ik_llama/conf/                       # ik_llama server env files
-│   ├── llama/conf/                          # llama-server env files
+│   ├── llama/conf/                          # llamacpp-server env files
 │   ├── mcp-proxy/Containerfile
 │   └── vllm/                                # conf/, Containerfile, entrypoint
-└── var/lib/llm/.config/systemd/user/        # llama-server, ik_llama@, vllm@
+└── var/lib/llm/.config/systemd/user/        # llamacpp-server, ik_llama@, vllm@
 ```
 
 ### Recreating the copy from a live box
@@ -79,7 +79,7 @@ sudo rsync -a /opt/llm/ root/opt/llm/
 # systemd user units of the llm user
 sudo mkdir -p root/var/lib/llm/.config/systemd/user
 sudo rsync -a \
-  /var/lib/llm/.config/systemd/user/llama-server.service \
+  /var/lib/llm/.config/systemd/user/llamacpp-server.service \
   /var/lib/llm/.config/systemd/user/ik_llama@.service \
   /var/lib/llm/.config/systemd/user/vllm@.container \
   root/var/lib/llm/.config/systemd/user/

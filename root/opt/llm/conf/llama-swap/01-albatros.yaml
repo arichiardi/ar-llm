@@ -16,7 +16,7 @@ models:
     # wait on /health: mark ready and forward. A down engine then fails the
     # request immediately instead of after healthCheckTimeout (60s).
     checkEndpoint: none
-    # llama-server advertises keep-alive and closes after a streamed response
+    # The engine advertises keep-alive but closes after a streamed response
     # (llama-swap issue #1205), which shows up as 502 proxy error: EOF on the
     # next request. Do not pool connections to it.
     disableKeepAlives: true
@@ -32,7 +32,7 @@ models:
     # wait on /health: mark ready and forward. A down engine then fails the
     # request immediately instead of after healthCheckTimeout (60s).
     checkEndpoint: none
-    # llama-server advertises keep-alive and closes after a streamed response
+    # The engine advertises keep-alive but closes after a streamed response
     # (llama-swap issue #1205), which shows up as 502 proxy error: EOF on the
     # next request. Do not pool connections to it.
     disableKeepAlives: true

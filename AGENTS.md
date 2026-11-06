@@ -136,16 +136,40 @@ save.
 
 ### Model IDs
 
+The fleet is named **`pelagic`** (Greek *pelagos*, "open sea"). The namespace is
+host- and engine-agnostic, like open water: it holds whatever creature swims or
+soars through it, and the backend can move without renaming anything. So the namespace itself
+stays `pelagic-ai`; the things inside it each keep their own sea-creature name. A
+host, engine, or model may carry another such name (petrel, fulmar, auk, orca)
+without touching the `pelagic` namespace. Pick creature names for the innards;
+keep `pelagic-ai` as the single namespace in front.
+
+Split the namespace into two independent tokens and never repeat either one:
+
+- **Fleet token** names the serving provider. It is `pelagic-ai`, set as the
+  client provider name (see the pi provider below), not part of the model ID.
+- **Author token** names who built the model. It leads the public ID.
+
 - **Public IDs** name the logical models that clients call. Use the
-  `alba-ai/<model>` prefix for every model this llama-swap exposes, whatever
-  the backend host. The public ID is stable; its backend can move.
+  OpenRouter author convention `<author>/<model>`: `<author>` is the upstream
+  author slug (HF/OpenRouter style, e.g. `google`, `qwen`, `liquid`, `zai`),
+  `<model>` is a stable logical slug. This matches how OpenRouter and direct
+  providers name the same model, so one model reads the same however it is
+  reached. The public ID is stable; its backend can move.
 - A model with one engine is a plain listed model: use its public ID as the
   model key. Set `useModelName` to the engine's own model name.
 - **Internal IDs** exist only for a public name that must switch between
-  mutually exclusive engines. Use the host prefix `alba-<engine>/<model>` for
-  the local box (`alba-ikllama/...`, `alba-polystrata/...`) and
-  `puf-<engine>/<model>` for puffin. Set `unlisted: true`; clients reach them
-  only through a profile pin.
+  mutually exclusive engines. They are engine-scoped, so use the host prefix
+  `alba-<engine>/<model>` for the local box (`alba-ikllama/...`,
+  `alba-polystrata/...`) and `puf-<engine>/<model>` for puffin. The host token
+  identifies the engine, not the author. Set `unlisted: true`; clients reach
+  them only through a profile pin.
+- **Client (pi) provider** is `pelagic-ai`. pi composes a model id as
+  `<provider>/<model>`, so a public `google/gemma4-moe` becomes
+  `pelagic-ai/google/gemma4-moe`. Three distinct segments, no doubled token:
+  fleet in the provider, author in the model, engine only inside internal IDs.
+- Never put the fleet token in a model ID. The provider already carries it, so
+  adding it again doubles the token in the composed id.
 
 ### Model names
 
@@ -160,17 +184,17 @@ A profile switches a public name between mutually exclusive engines. Only such
 names need a profile: everything else stays listed under any active profile.
 
 - Name each profile `alba-<engine>`.
-- Pin the switched public ID to the engine's internal ID.
+- Pin the switched public ID (author-namespaced) to the engine's internal ID.
 - `hooks.on_startup.profile` selects the profile at boot.
 
 ```yaml
 profiles:
   alba-ikllama:
     pins:
-      "alba-ai/gemma4-moe": "alba-ikllama/gemma4-moe"
+      "google/gemma4-moe": "alba-ikllama/gemma4-moe"
   alba-polystrata:
     pins:
-      "alba-ai/gemma4-moe": "alba-polystrata/gemma4-moe"
+      "google/gemma4-moe": "alba-polystrata/gemma4-moe"
 ```
 
 ### Endpoint macros

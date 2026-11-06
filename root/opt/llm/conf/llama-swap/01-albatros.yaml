@@ -6,7 +6,7 @@ models:
   ############ llama.cpp router, 10434 ############
   # Public IDs, always listed. useModelName sends the engine's own model name.
 
-  "alba-ai/LFM2.5-24B-A2B":
+  "liquid/LFM2.5-24B-A2B":
     name: "LFM2.5-24B-A2B"
     description: "LiquidAI MoE QAD-Q4_0, llama.cpp router, resident at startup"
     cmd: ${hold}
@@ -22,7 +22,7 @@ models:
     disableKeepAlives: true
     ttl: 0
 
-  "alba-ai/LFM3-Omni-2B":
+  "liquid/LFM3-Omni-2B":
     name: "LFM3-Omni-2B"
     description: "LiquidAI omni 2B BF16 with vision, llama.cpp router"
     cmd: ${hold}
@@ -39,7 +39,7 @@ models:
     ttl: 0
 
   ############ Gemma 4 26B-A4B, one engine at a time ############
-  # One entry per engine, both unlisted. `alba-ai/gemma4-moe` is a profile pin.
+  # One entry per engine, both unlisted. `google/gemma4-moe` is a profile pin.
   # Do not wait on /health: the engine is owned by its own unit, not by
   # llama-swap, so a stopped or loading engine fails at once instead of waiting.
 
@@ -63,15 +63,15 @@ models:
     disableKeepAlives: true
     ttl: 0
 
-# Only `alba-ai/gemma4-moe` switches engine with the profile.
+# Only `google/gemma4-moe` switches engine with the profile.
 #   curl -X PUT http://127.0.0.1:20434/api/profiles/active -d '{"name":"alba-polystrata"}'
 profiles:
   alba-ikllama:
     pins:
-      "alba-ai/gemma4-moe": "alba-ikllama/gemma4-moe"
+      "google/gemma4-moe": "alba-ikllama/gemma4-moe"
   alba-polystrata:
     pins:
-      "alba-ai/gemma4-moe": "alba-polystrata/gemma4-moe"
+      "google/gemma4-moe": "alba-polystrata/gemma4-moe"
 
 hooks:
   on_startup:

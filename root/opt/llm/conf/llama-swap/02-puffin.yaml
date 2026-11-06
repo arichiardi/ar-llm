@@ -8,21 +8,7 @@ models:
   # ignores the request model field, so no useModelName is needed. A missing
   # name works exactly like the engine's own ID.
 
-  "alba-ai/glm-5.3-flash":
-    name: "GLM-5.3-Flash"
-    description: "GLM 5.3 Flash REAP50-Q3_K_M, 12.5B active, text only (PolyStrata)"
-    cmd: ${hold}
-    proxy: ${puffin-polystrata}
-    # puffin is a separate host whose engine llama-swap does not own or start,
-    # so do not wait on /health: forward the first request instead. A down or
-    # loading engine then fails at once with a connection error, not after
-    # healthCheckTimeout (60s). PolyStrata closes after a streamed response, so
-    # do not pool connections to it.
-    checkEndpoint: none
-    disableKeepAlives: true
-    ttl: 0
-
-  "alba-ai/qwen3.8-flash-next":
+  "qwen/qwen3.8-flash-next":
     name: "Qwen3.8-Flash-Next"
     description: "Qwen3.8-Flash-Next IQ3_S, 2-part split GGUF, image + text (PolyStrata)"
     cmd: ${hold}

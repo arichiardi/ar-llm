@@ -4,14 +4,15 @@
 models:
 
   ############ PolyStrata on puffin, 13434 ############
-  # Public ID, always listed. useModelName sends the engine's own model name.
+  # Public IDs, always listed. PolyStrata serves one engine per port and
+  # ignores the request model field, so no useModelName is needed. A missing
+  # name works exactly like the engine's own ID.
 
   "alba-ai/glm-5.3-flash":
     name: "GLM-5.3-Flash"
     description: "GLM 5.3 Flash REAP50-Q3_K_M, 12.5B active, text only (PolyStrata)"
     cmd: ${hold}
     proxy: ${puffin-polystrata}
-    useModelName: glm-5.3-flash-reap50-q3_k_m
     # puffin is a separate host whose engine llama-swap does not own or start,
     # so do not wait on /health: forward the first request instead. A down or
     # loading engine then fails at once with a connection error, not after
@@ -26,7 +27,6 @@ models:
     description: "Qwen3.8-Flash-Next IQ3_S, 2-part split GGUF, image + text (PolyStrata)"
     cmd: ${hold}
     proxy: ${puffin-polystrata}
-    useModelName: qwen38-flash-next-IQ3_S
     modalities: [image]
     # Same as above: puffin runs the engine, so forward at once and do not
     # pool connections to a PolyStrata that closes after each stream.

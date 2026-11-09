@@ -41,18 +41,18 @@ extensions/
 └── pi-skill-request-params/ # Per-skill provider request params
 pi/                          # Pi agent configuration files
 prompts/                     # Custom prompt templates
-root/                        # Byte-for-byte copy of the LLM box's system files
+fs/                          # Filesystem overlays; fs/root is the base system copy
 skills/                      # Custom skills
 ```
 
 Each extension package contains its own `package.json`, `README.md`, `LICENSE`, `tsconfig.json`, and TypeScript source under `src/`.
 
-## LLM box system files (`root/`)
+## LLM box system files (`fs/root/`)
 
-`root/` is a byte-for-byte copy of the system files that make up the LLM server setup: everything is stored at its literal on-disk path, so the tree is self-documenting and deployable as-is.
+`fs/root/` is the base filesystem overlay: a byte-for-byte copy of the system files that make up the LLM server setup. Everything is stored at its literal on-disk path, so the tree is self-documenting and deployable as-is. Per-host overlays (for example `fs/edge/`) layer on top of it at deploy time.
 
 ```
-root/
+fs/root/
 ├── etc/conf.d/                              # symlinks into /opt/llm
 │   ├── ik_llama -> ../../opt/llm/ik_llama/conf
 │   ├── llama -> ../../opt/llm/llama/conf
@@ -74,27 +74,27 @@ Files are mirrored verbatim (no content transformation); `rsync -a` preserves sy
 
 ```bash
 # /opt/llm — confs, chat templates, Containerfiles, build helpers
-sudo rsync -a /opt/llm/ root/opt/llm/
+sudo rsync -a /opt/llm/ fs/root/opt/llm/
 
 # systemd user units of the llm user
-sudo mkdir -p root/var/lib/llm/.config/systemd/user
+sudo mkdir -p fs/root/var/lib/llm/.config/systemd/user
 sudo rsync -a \
   /var/lib/llm/.config/systemd/user/llamacpp-server.service \
   /var/lib/llm/.config/systemd/user/ik_llama@.service \
   /var/lib/llm/.config/systemd/user/vllm@.container \
-  root/var/lib/llm/.config/systemd/user/
+  fs/root/var/lib/llm/.config/systemd/user/
 
 # /etc/conf.d symlinks (relative, so the tree is relocatable)
-sudo mkdir -p root/etc/conf.d
-sudo ln -sfn ../../opt/llm/ik_llama/conf root/etc/conf.d/ik_llama
-sudo ln -sfn ../../opt/llm/llama/conf root/etc/conf.d/llama
-sudo ln -sfn ../../opt/llm/vllm/conf  root/etc/conf.d/vllm
+sudo mkdir -p fs/root/etc/conf.d
+sudo ln -sfn ../../opt/llm/ik_llama/conf fs/root/etc/conf.d/ik_llama
+sudo ln -sfn ../../opt/llm/llama/conf fs/root/etc/conf.d/llama
+sudo ln -sfn ../../opt/llm/vllm/conf  fs/root/etc/conf.d/vllm
 ```
 
 ### Deploying to (re)create the setup on a server
 
 ```bash
-sudo rsync -a root/. /
+sudo rsync -a fs/root/. /
 
 # Activate one variant per item: the fixed path is a symlink to the chosen
 # variant, the variants stay in the tree. Router preset variants:
@@ -112,7 +112,7 @@ sudo find /opt/llm/bin -type f -exec chmod 774 {} ';'
 sudo -u llm systemctl --user daemon-reload
 ```
 
-The `llm` user, model weights (`/var/lib/llm/models`), and the `codeberg.org/k153/vllm-openai-custom` image (build with `root/opt/llm/vllm/Containerfile`) must exist on the target beforehand.
+The `llm` user, model weights (`/var/lib/llm/models`), and the `codeberg.org/k153/vllm-openai-custom` image (build with `fs/root/opt/llm/vllm/Containerfile`) must exist on the target beforehand.
 
 ## License
 

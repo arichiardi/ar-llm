@@ -112,7 +112,7 @@ Never use `clj-paren-repair` on `.el` files — that tool is for Clojure only.
 The llama-swap config drives model routing on the LLM box. It is split into
 `00-`-numbered fragments next to `common`. The live directory is
 `/opt/llm/conf/llama-swap/`; the tracked copy is
-`root/opt/llm/conf/llama-swap/`. Edit the live files, then mirror them back into
+`fs/root/opt/llm/conf/llama-swap/`. Edit the live files, then mirror them back into
 the repo so the two stay byte-identical. Only `*.yaml`/`*.yml` files are read,
 so `common` is ignored by the loader.
 

@@ -1,5 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Start/restart one llama.cpp instance from its /opt/llm/conf/llamacpp/<name>
+# env file. Pass the instance name, not a path.
+#
+# Do not strip a file extension here: llama.cpp instance names contain dots
+# (LFM2.5-24B-A2B), so an extension strip would truncate them.
+
+if [ $# -lt 1 ]; then
+    echo "${0##*/}: pass the instance name, e.g. ${0##*/} LFM2.5-24B-A2B" >&2
+    exit 2
+fi
+
+env_name="${1##*/}"
+
 llm-systemctl daemon-reload
-llm-systemctl restart llamacpp-server
+llm-systemctl restart "llamacpp@${env_name}"

@@ -94,7 +94,10 @@ sudo ln -sfn ../../opt/llm/vllm/conf  fs/root/etc/conf.d/vllm
 ### Deploying to (re)create the setup on a server
 
 ```bash
+# Base overlay first, then the host overlay (edge here). Apply exactly one
+# host overlay; base alone is not deployable (no `common`, so no listen port).
 sudo rsync -a fs/root/. /
+sudo rsync -a fs/edge/. /
 
 # Activate one variant per item: the fixed path is a symlink to the chosen
 # variant, the variants stay in the tree. Router preset variants:

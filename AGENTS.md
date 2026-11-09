@@ -111,19 +111,24 @@ Never use `clj-paren-repair` on `.el` files — that tool is for Clojure only.
 
 The llama-swap config drives model routing on the LLM box. It is split into
 `00-`-numbered fragments next to `common`. The live directory is
-`/opt/llm/conf/llama-swap/`; the tracked copy is
-`fs/root/opt/llm/conf/llama-swap/`. Edit the live files, then mirror them back into
-the repo so the two stay byte-identical. Only `*.yaml`/`*.yml` files are read,
-so `common` is ignored by the loader.
+`/opt/llm/conf/llama-swap/` on every host. In the repo the tracked copy uses the
+`fs/` overlay layout: the shared base lives in
+`fs/root/opt/llm/conf/llama-swap/` and each host layers its own fragments over
+it from a `fs/<host>/opt/llm/conf/llama-swap/` overlay (for example `fs/edge/`).
+Deploy copies the base first, then one host overlay, so the live directory ends
+up holding only that host's fragments. Edit the live files, then mirror them
+back into the matching fragment. Only `*.yaml`/`*.yml` files are read, so
+`common` is ignored by the loader.
 
 Fragments load in filename order and merge: mappings recurse, sequences append,
 and a repeated scalar or a repeated identity-map key (`models`, `profiles`, ...)
 is a hard error. Keep each model and profile in exactly one fragment. Current
-split:
+layout:
 
-- `00-base.yaml` - global settings, CORS, and macros for every host.
-- `01-albatros.yaml` - this host's engines, models, profiles, and startup hook.
-- `02-puffin.yaml` - the remote puffin engine (not yet present).
+- `fs/root/.../00-base.yaml` - global settings, CORS, and macros shared by every host.
+- `fs/edge/.../common` - edge listen address (`127.0.0.1:20434`).
+- `fs/edge/.../01-edge.yaml` - the edge host's engines, models, and profiles.
+- `fs/edge/.../02-peer-upstream.yaml` - the compute peer seen as a remote upstream.
 
 Validate every change before it reaches the service:
 

@@ -28,7 +28,7 @@ models:
 
   "liquid/LFM3-Omni-2B":
     name: "LFM3-Omni-2B"
-    description: "LiquidAI omni 2B BF16 with vision (llama.cpp)"
+    description: "LiquidAI omni 2B BF16, text/image/video/audio in, text+speech out (llama.cpp)"
     cmd: ${systemctl} start --wait llamacpp@LFM3-Omni-2B
     cmdStop: ${systemctl} stop llamacpp@LFM3-Omni-2B
     proxy: ${local-llamacpp-omni}

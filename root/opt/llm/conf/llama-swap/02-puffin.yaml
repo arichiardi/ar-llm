@@ -14,8 +14,18 @@ models:
     cmd: ${hold}
     proxy: ${puffin-polystrata}
     modalities: [image]
-    # Same as above: puffin runs the engine, so forward at once and do not
-    # pool connections to a PolyStrata that closes after each stream.
+    # Puffin runs the engine externally, so forward at once and do not pool
+    # connections to a PolyStrata that closes after each stream.
     checkEndpoint: none
     disableKeepAlives: true
     ttl: 0
+
+routing:
+  router:
+    settings:
+      groups:
+        puffin:
+          swap: false
+          exclusive: false
+          members:
+            - "qwen/qwen3.8-flash-next"

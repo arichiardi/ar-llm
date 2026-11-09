@@ -1,78 +1,91 @@
 # llama-swap fragment: albatros (this host) engines.
 # Loaded after 00-base.yaml, which defines the macros used here.
+#
+# Every engine is now managed by llama-swap as its own process. llama.cpp no
+# longer runs in router mode: each GGUF is one llama-server process (one port)
+# started on demand via llamacpp@.service. PolyStrata and ik_llama use the same
+# pattern. The `gpu` group keeps exactly one model resident on the single card;
+# a request for another evicts the current one. An idle ttl (600s) unloads a
+# model that stops receiving traffic, freeing VRAM.
 
 models:
 
-  ############ llama.cpp router, 10434 ############
-  # Public IDs, always listed. useModelName sends the engine's own model name.
+  ############ llama.cpp, one process per model (managed) ############
+  # cmd starts the systemd template instance and blocks (--wait) until it exits;
+  # cmdStop stops it. checkEndpoint defaults to a health poll, which gates on
+  # the model finishing load. --alias in each env file matches the model ID, so
+  # no useModelName is needed. disableKeepAlives: llama-server closes the
+  # connection after a streamed response (issue #1205), seen as 502 on reuse.
 
   "liquid/LFM2.5-24B-A2B":
     name: "LFM2.5-24B-A2B"
-    description: "LiquidAI MoE QAD-Q4_0, llama.cpp router, resident at startup"
-    cmd: ${hold}
+    description: "LiquidAI MoE QAD-Q4_0 (llama.cpp)"
+    cmd: ${systemctl} start --wait llamacpp@LFM2.5-24B-A2B
+    cmdStop: ${systemctl} stop llamacpp@LFM2.5-24B-A2B
     proxy: ${local-llamacpp}
-    useModelName: LFM2.5-24B-A2B
-    # The engine is owned by its own unit, not by llama-swap, so do not
-    # wait on /health: mark ready and forward. A down engine then fails the
-    # request immediately instead of after healthCheckTimeout (60s).
-    checkEndpoint: none
-    # The engine advertises keep-alive but closes after a streamed response
-    # (llama-swap issue #1205), which shows up as 502 proxy error: EOF on the
-    # next request. Do not pool connections to it.
     disableKeepAlives: true
-    ttl: 0
+    ttl: 600
 
   "liquid/LFM3-Omni-2B":
     name: "LFM3-Omni-2B"
-    description: "LiquidAI omni 2B BF16 with vision, llama.cpp router"
-    cmd: ${hold}
-    proxy: ${local-llamacpp}
-    useModelName: LFM3-Omni-2B
-    # The engine is owned by its own unit, not by llama-swap, so do not
-    # wait on /health: mark ready and forward. A down engine then fails the
-    # request immediately instead of after healthCheckTimeout (60s).
-    checkEndpoint: none
-    # The engine advertises keep-alive but closes after a streamed response
-    # (llama-swap issue #1205), which shows up as 502 proxy error: EOF on the
-    # next request. Do not pool connections to it.
+    description: "LiquidAI omni 2B BF16 with vision (llama.cpp)"
+    cmd: ${systemctl} start --wait llamacpp@LFM3-Omni-2B
+    cmdStop: ${systemctl} stop llamacpp@LFM3-Omni-2B
+    proxy: ${local-llamacpp-omni}
     disableKeepAlives: true
-    ttl: 0
+    ttl: 600
 
-  ############ Gemma 4 26B-A4B, one engine at a time ############
-  # One entry per engine, both unlisted. `google/gemma4-moe` is a profile pin.
-  # Do not wait on /health: the engine is owned by its own unit, not by
-  # llama-swap, so a stopped or loading engine fails at once instead of waiting.
+  ############ Gemma 4 26B-A4B, managed ############
 
   "alba-ikllama/gemma4-moe":
-    name: "Gemma 4 MoE"
+    name: "Gemma 4 MoE (ik_llama)"
     description: "Gemma 4 26B-A4B QAT q4_0 + MTP draft + vision (ik_llama)"
     unlisted: true
-    cmd: ${hold}
+    cmd: ${systemctl} start --wait ik_llama@gemma-4-26B-A4B-qat
+    cmdStop: ${systemctl} stop ik_llama@gemma-4-26B-A4B-qat
     proxy: ${local-ikllama}
-    checkEndpoint: none
     disableKeepAlives: true
-    ttl: 0
+    ttl: 600
 
   "alba-polystrata/gemma4-moe":
-    name: "Gemma 4 MoE"
+    name: "Gemma 4 MoE (PolyStrata)"
     description: "Gemma 4 26B-A4B UD-Q3_K_M + vision (PolyStrata)"
     unlisted: true
-    cmd: ${hold}
+    cmd: ${systemctl} start --wait polystrata@gemma4
+    cmdStop: ${systemctl} stop polystrata@gemma4
     proxy: ${local-polystrata}
-    checkEndpoint: none
     disableKeepAlives: true
-    ttl: 0
+    ttl: 600
+    # PolyStrata unit has TimeoutStopSec=120; give llama-swap margin.
+    unloadTimeout: 130
 
-# Only `google/gemma4-moe` switches engine with the profile.
-#   curl -X PUT http://127.0.0.1:20434/api/profiles/active -d '{"name":"alba-polystrata"}'
-profiles:
-  alba-ikllama:
-    pins:
-      "google/gemma4-moe": "alba-ikllama/gemma4-moe"
-  alba-polystrata:
-    pins:
-      "google/gemma4-moe": "alba-polystrata/gemma4-moe"
+# Stable public alias for Gemma 4. Resolved per request. warm = use whichever
+# target is already loaded (no reload wait); otherwise cold-start the first
+# target (PolyStrata). Targets are the gpu-group members, so the one-per-card
+# eviction still applies to the resolved model. Switch to `strategy: pin` for a
+# deterministic PolyStrata backend.
+selectors:
+  "google/gemma4-moe":
+    strategy: warm
+    targets:
+      - "alba-polystrata/gemma4-moe"
+      - "alba-ikllama/gemma4-moe"
+    name: "Gemma 4 MoE"
+    description: "Gemma 4 26B-A4B (PolyStrata default; ik_llama if already warm)"
 
-hooks:
-  on_startup:
-    profile: alba-polystrata
+# One GPU, one model at a time. swap:true keeps a single member resident;
+# exclusive:true means starting any member unloads every other group's member.
+# The four local engines therefore share the card: a request for a new model
+# evicts the running one. Idle ttl 600s reclaims VRAM when traffic stops.
+routing:
+  router:
+    settings:
+      groups:
+        gpu:
+          swap: true
+          exclusive: true
+          members:
+            - "liquid/LFM2.5-24B-A2B"
+            - "liquid/LFM3-Omni-2B"
+            - "alba-ikllama/gemma4-moe"
+            - "alba-polystrata/gemma4-moe"

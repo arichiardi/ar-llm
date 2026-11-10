@@ -1,9 +1,0 @@
-#!/bin/bash
-
-set -euo pipefail
-
-env_name="${1##*/}"
-env_name="${env_name%.env}"
-
-llm-systemctl daemon-reload
-llm-systemctl restart "ik_llama@$env_name"

@@ -1,7 +1,0 @@
-# PolyStrata - settings shared by every instance.
-
-STRATA_ENGINE=strata
-STRATA_DATA=/var/cache/polystrata
-STRATA_PORT=13434
-STRATA_ARGS=
-STRATA_ALLOWED_HOSTS=.albaforge.com

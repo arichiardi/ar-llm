@@ -41,81 +41,16 @@ extensions/
 └── pi-skill-request-params/ # Per-skill provider request params
 pi/                          # Pi agent configuration files
 prompts/                     # Custom prompt templates
-fs/                          # Filesystem overlays; fs/root is the base system copy
 skills/                      # Custom skills
 ```
 
 Each extension package contains its own `package.json`, `README.md`, `LICENSE`, `tsconfig.json`, and TypeScript source under `src/`.
 
-## LLM box system files (`fs/root/`)
+## LLM box system files
 
-`fs/root/` is the base filesystem overlay: a byte-for-byte copy of the system files that make up the LLM server setup. Everything is stored at its literal on-disk path, so the tree is self-documenting and deployable as-is. Per-host overlays (for example `fs/edge/`) layer on top of it at deploy time.
-
-```
-fs/root/
-├── etc/conf.d/                              # symlinks into /opt/llm
-│   ├── ik_llama -> ../../opt/llm/ik_llama/conf
-│   ├── llama -> ../../opt/llm/llama/conf
-│   └── vllm  -> ../../opt/llm/vllm/conf
-├── etc/lact/config-dual-3090.yaml           # lact GPU configs, one per machine
-├── opt/llm/
-│   ├── bin/                                 # llama.cpp / vLLM wrapper scripts
-│   ├── chat-templates/                      # .jinja chat templates
-│   ├── ik_llama/conf/                       # ik_llama server env files
-│   ├── llama/conf/                          # llamacpp-server env files
-│   ├── mcp-proxy/Containerfile
-│   └── vllm/                                # conf/, Containerfile, entrypoint
-└── var/lib/llm/.config/systemd/user/        # llamacpp-server, ik_llama@, vllm@
-```
-
-### Recreating the copy from a live box
-
-Files are mirrored verbatim (no content transformation); `rsync -a` preserves symlinks, permissions, and timestamps. Run from the repo root on the source machine:
-
-```bash
-# /opt/llm — confs, chat templates, Containerfiles, build helpers
-sudo rsync -a /opt/llm/ fs/root/opt/llm/
-
-# systemd user units of the llm user
-sudo mkdir -p fs/root/var/lib/llm/.config/systemd/user
-sudo rsync -a \
-  /var/lib/llm/.config/systemd/user/llamacpp-server.service \
-  /var/lib/llm/.config/systemd/user/ik_llama@.service \
-  /var/lib/llm/.config/systemd/user/vllm@.container \
-  fs/root/var/lib/llm/.config/systemd/user/
-
-# /etc/conf.d symlinks (relative, so the tree is relocatable)
-sudo mkdir -p fs/root/etc/conf.d
-sudo ln -sfn ../../opt/llm/ik_llama/conf fs/root/etc/conf.d/ik_llama
-sudo ln -sfn ../../opt/llm/llama/conf fs/root/etc/conf.d/llama
-sudo ln -sfn ../../opt/llm/vllm/conf  fs/root/etc/conf.d/vllm
-```
-
-### Deploying to (re)create the setup on a server
-
-```bash
-# Base overlay first, then the host overlay (edge here). Apply exactly one
-# host overlay; base alone is not deployable (no `common`, so no listen port).
-sudo rsync -a fs/root/. /
-sudo rsync -a fs/edge/. /
-
-# Activate one variant per item: the fixed path is a symlink to the chosen
-# variant, the variants stay in the tree. Router preset variants:
-# router-preset_3090x2.ini (dual 3090) and router-preset_4060.ini (single 4060).
-sudo ln -sfn router-preset_3090x2.ini /etc/conf.d/llama/router-preset.ini
-sudo ln -sfn config-dual-3090.yaml     /etc/lact/config.yaml
-
-# /opt/llm is shared: group-writable dirs, world-readable files, and only the
-# llm user/group may execute the bin/ helpers
-sudo chown -R llm:llm /opt/llm
-sudo find /opt/llm -type d -exec chmod 2775 {} ';'
-sudo find /opt/llm -type f -exec chmod 664 {} ';'
-sudo find /opt/llm/bin -type f -exec chmod 774 {} ';'
-
-sudo -u llm systemctl --user daemon-reload
-```
-
-The `llm` user, model weights (`/var/lib/llm/models`), and the `codeberg.org/k153/vllm-openai-custom` image (build with `fs/root/opt/llm/vllm/Containerfile`) must exist on the target beforehand.
+The LLM box system files (the `pelagic` serving fleet infra) live in the
+private [`pelagic-infra`](https://git.albaforge.com/pelagic-infra) repo. This
+repo holds only Pi extensions, prompt templates, and skills.
 
 ## License
 

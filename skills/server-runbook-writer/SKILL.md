@@ -26,7 +26,7 @@ When writing runbooks, follow these key principles:
 5. Add examples for the risky or ambiguous steps.
 6. Give a short why for each command group.
 
-## Three hard rules
+## Hard rules
 
 These override any conflicting guidance below.
 
@@ -40,6 +40,14 @@ These override any conflicting guidance below.
    repeating it on every line.
 3. Explain the why. Give a short rationale, one to three sentences, for each
    group of commands, plus the expected result. A group without a why is incomplete.
+4. Emit phases, not a driver script. Deliver the runbook as Markdown phases with
+   command blocks the operator runs one at a time at the terminal. Do not create
+   a single `.sh` file that bundles every phase. Do not add a `DRY_RUN` flag, an
+   `id -u` root gate, or a `read` confirmation prompt. A single script runs every
+   phase as one user, which erases the `[admin]`/`[service]` split and hides each
+   `Expect:` check. The operator runs each phase in its named shell, reads the
+   `Expect:` line, then moves to the next phase. Only bundle commands into a
+   script when the operator explicitly asks for a script.
 
 ## For each runbook request, you should
 
@@ -246,6 +254,8 @@ Rules:
 - Omitting important details.
 - Using undefined terminology.
 - Destructive steps without a rollback.
+- A monolithic driver script that bundles every phase into one `bash` run. Phases
+  run one at a time at the terminal, each in its named shell.
 - Placing a quadlet in a systemd unit directory (`/usr/local/lib/systemd/user/`,
   `%E/systemd/user/`) or in `/etc/conf.d/`.
 
@@ -259,6 +269,8 @@ Rules:
 - [ ] Every phase names its rollback.
 - [ ] The stop-signs table has an exact rollback per row.
 - [ ] No `sudo -u <service>` remains.
+- [ ] No driver script. Phases are command blocks the operator runs one at a time
+      in the named shell, with no `DRY_RUN` flag, root gate, or `read` prompt.
 - [ ] No literal UID is written; a quadlet path derives it with
       `id -u <service>`.
 - [ ] Staged file paths are absolute.

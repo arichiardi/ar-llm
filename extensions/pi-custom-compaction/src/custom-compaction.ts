@@ -515,8 +515,13 @@ export default function (pi: ExtensionAPI) {
 			.filter((text) => text.length > 0);
 		const conversationText = pieces.join("\n\n");
 
+		const conversationTokens = estimateTextTokens(conversationText);
+		const previousSummaryTokens = previousSummary ? estimateTextTokens(previousSummary) : 0;
+		const inputTokens = conversationTokens + previousSummaryTokens + promptOverheadTokens(resolvedConfig.prompt);
+
 		ctx.ui.notify(
-			`Custom compaction: summarizing ${allMessages.length} messages (${tokensBefore.toLocaleString()} tokens) with ${model.id}...`,
+			`Custom compaction: ${allMessages.length} messages, ~${inputTokens.toLocaleString()} input tokens ` +
+				`(context ${tokensBefore.toLocaleString()}) with ${model.id}...`,
 			"info",
 		);
 
@@ -650,10 +655,9 @@ export default function (pi: ExtensionAPI) {
 
 			// Single-shot when there is no chunking config, or the transcript plus
 			// the previous summary fit the budget.
-			const previousSummaryTokens = previousSummary ? estimateTextTokens(previousSummary) : 0;
 			const singleBudget = chunking ? mapBudget - previousSummaryTokens : Number.POSITIVE_INFINITY;
-			if (!chunking || estimateTextTokens(conversationText) <= singleBudget) {
-				log(`Single-shot compaction: conversationTokens=${estimateTextTokens(conversationText)}, budget=${singleBudget}`);
+			if (!chunking || conversationTokens <= singleBudget) {
+				log(`Single-shot compaction: conversationTokens=${conversationTokens}, budget=${singleBudget}`);
 				const userPrompt = buildUserPrompt(resolvedConfig.prompt, conversationText, previousSummary);
 				return finalize(await callModel(resolvedConfig.prompt.system, userPrompt));
 			}

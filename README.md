@@ -39,12 +39,27 @@ extensions/
 ├── pi-notify/               # Terminal notifications on agent idle
 ├── pi-plan-mode/            # Read-only plan-and-execute mode
 └── pi-skill-request-params/ # Per-skill provider request params
+chat-templates/              # Jinja chat templates for llama.cpp servers
 pi/                          # Pi agent configuration files
 prompts/                     # Custom prompt templates
 skills/                      # Custom skills
 ```
 
 Each extension package contains its own `package.json`, `README.md`, `LICENSE`, `tsconfig.json`, and TypeScript source under `src/`.
+
+## Chat Templates
+
+[`chat-templates/`](./chat-templates/) holds the Jinja chat templates used by
+the llama.cpp serving fleet. Each server config selects one with
+`LLAMA_ARG_CHAT_TEMPLATE_FILE`. See
+[`chat-templates/README.md`](./chat-templates/README.md) for the per-file notes
+and the deploy path.
+
+For **Qwen** models we highly recommend the community **Qwen Fixed Chat
+Templates** by froggeric, which fix the stock Qwen templates' tool-call,
+reasoning, and vision handling: <https://huggingface.co/froggeric/Qwen-Fixed-Chat-Templates>.
+These are not vendored here; deploy them to `/var/lib/llm/chat-templates/` and
+point the server config at them.
 
 ## LLM box system files
 

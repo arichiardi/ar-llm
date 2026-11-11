@@ -111,6 +111,68 @@ Then state these rules:
 3. A block that mixes realms is two steps. Run its `[admin]` lines in the admin
    shell, then switch to the `[service]` shell for the rest.
 
+## Command formatting for clean paste
+
+The operator copies commands from the terminal and runs them by hand. pi renders
+each command line wrapped to the pane width, and a wrapped line pastes as broken
+fragments. Keep every command pasteable.
+
+1. One command per line. Keep command lines short.
+2. When a command is long, split it with a trailing backslash at a space between
+   top-level tokens.
+3. Never place a backslash inside quotes, after a hash, inside a heredoc body,
+   in a non-shell block, or with a trailing space after it.
+4. Shorten commands with variables set once in an early step:
+
+   ```bash
+   svc=<service>
+   cfg=/etc/conf.d/<svc>
+   uid=$(id -u "$svc")
+   ```
+
+5. Give each command group a why, so the operator can retype a command from the
+   phase text if a paste breaks.
+
+## Step size and the paste unit
+
+The operator runs a runbook one block at a time: copy a block, run it, read
+its `Expect:`, then move on. Size every step for that loop.
+
+1. One fenced block per step. One shell per block. Target 2-3 commands per block.
+2. Every step has an `Expect:` line. Write it as prose right after the fenced
+   block, never inside it. `Expect:` is a gate the operator reads, not a command;
+   inside the block it gets copied and run. The `Expect:` is the step's success
+   criterion. The operator does not advance until it passes.
+3. A phase that needs more than 3 commands splits into numbered sub-steps
+   (1a, 1b, 1c). Each sub-step is its own 2-3 command block with its own `Expect:`.
+4. The runbook is a document, not a chat turn. Deliver all phases at once. The
+   operator copies one block at a time. The paste unit is a fenced block, not
+   `/copy`.
+5. Keep each command line short (see "Command formatting for clean paste") so a
+   single block copies without wrap.
+6. The fenced block is commands only. Every annotation (`Why:`, `Expect:`,
+   `Record:`, `If it fails:`) lives in prose around the block, never inside it.
+
+Good step. Prose gate, then a fenced block of commands only:
+
+```text
+Expect: active
+```
+
+```bash
+systemctl --user restart "$svc"
+systemctl --user is-active "$svc"
+```
+
+Bad step. A page; the operator cannot paste it, and one failure hides the rest.
+The `Expect:` is trapped inside the block:
+
+```bash
+systemctl --user daemon-reload && systemctl --user restart "$svc" \
+  && systemctl --user is-active "$svc" && journalctl --user -u "$svc" -n 50
+Expect: active
+```
+
 ## Assign owner, group, and mode on every write
 
 Every `install`, `cp`, `tee`, or `rsync` that lands a file the service reads or
@@ -275,3 +337,9 @@ Rules:
       `id -u <service>`.
 - [ ] Staged file paths are absolute.
 - [ ] The TODO checklist matches the phase headings.
+- [ ] No fenced block holds more than 3 commands; a wider phase is split into
+      numbered sub-steps.
+- [ ] Every step has an `Expect:` success criterion, written as prose after the
+      block, never inside a fenced block.
+- [ ] No command line runs wide; a long command splits with a trailing backslash
+      at a token boundary, with no trailing space and none inside quotes.

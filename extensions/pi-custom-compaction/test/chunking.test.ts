@@ -21,6 +21,19 @@ describe("estimateTextTokens", () => {
 		assert.equal(estimateTextTokens("aaaa"), 1);
 		assert.equal(estimateTextTokens("aaaaa"), 2);
 	});
+
+	it("uses the model-specific chars/token ratio", () => {
+		// 100 chars: 25 tokens at 4 chars/token, 34 at 3 chars/token.
+		const text = "a".repeat(100);
+		assert.equal(estimateTextTokens(text, 4), 25);
+		assert.equal(estimateTextTokens(text, 3), 34);
+	});
+
+	it("falls back to the default ratio for a non-positive ratio", () => {
+		const text = "a".repeat(100);
+		assert.equal(estimateTextTokens(text, 0), 25);
+		assert.equal(estimateTextTokens(text, -1), 25);
+	});
 });
 
 describe("computeChunkBudget", () => {
@@ -77,6 +90,15 @@ describe("splitPieces", () => {
 	it("splits at message boundaries", () => {
 		const chunks = splitPieces(["aaaa", "bbbb", "cccc"], 2);
 		assert.deepEqual(chunks, ["aaaa\n\nbbbb", "cccc"]);
+	});
+
+	it("uses the chars/token ratio to size chunks", () => {
+		const piece = "a".repeat(100);
+		// Budget 30 tokens. At 4 chars/token the piece is 25 tokens (fits).
+		assert.equal(splitPieces([piece], 30, 0, 4).length, 1);
+		assert.doesNotMatch(splitPieces([piece], 30, 0, 4)[0], /characters omitted/);
+		// At 3 chars/token the same piece is 34 tokens, over budget: it truncates.
+		assert.match(splitPieces([piece], 30, 0, 3)[0], /characters omitted/);
 	});
 
 	it("truncates a single oversized message head and tail", () => {

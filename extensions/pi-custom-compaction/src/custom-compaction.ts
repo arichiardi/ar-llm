@@ -58,7 +58,7 @@ import * as path from "path";
 import { uuidv7, type Usage } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { convertToLlm, serializeConversation } from "@earendil-works/pi-coding-agent";
-import { computeChunkBudget, estimateTextTokens, splitPieces } from "./chunking.js";
+import { computeChunkBudget, estimateTextTokens, splitPieces, CHARS_PER_TOKEN } from "./chunking.js";
 
 // ============================================================
 // Configuration types
@@ -109,6 +109,12 @@ interface ProviderConfig {
 interface ChunkingConfig {
   /** The model's true usable context per request. Overrides the model metadata. */
   "context-window": number;
+  /**
+   * Characters per token for the model's real tokenizer. Default 4. Lower it
+   * (e.g. 3) for tokenizers that average fewer characters per token, such as
+   * models on dense/code transcripts. Absorbs estimator overflow.
+   */
+  "estimation-chars-per-token"?: number;
   /** Headroom for estimator error. Default 512. */
   "safety-tokens"?: number;
   /** Messages repeated from the tail of one chunk at the start of the next. Default 0. */
@@ -121,6 +127,7 @@ interface ChunkingConfig {
 
 interface ResolvedChunking {
   contextWindow: number;
+  estimationCharsPerToken: number;
   safetyTokens: number;
   overlapMessages: number;
   maxDepth: number;
@@ -317,6 +324,15 @@ function resolveChunking(
     return null;
   }
 
+  const estimationCharsPerToken = raw["estimation-chars-per-token"] ?? CHARS_PER_TOKEN;
+  if (typeof estimationCharsPerToken !== "number" || !Number.isFinite(estimationCharsPerToken) || estimationCharsPerToken <= 0) {
+    console.error(
+      `[custom-compaction] Provider "${sessionProvider}": "chunking.estimation-chars-per-token" must be ` +
+      `a positive number. Chunking was disabled.`
+    );
+    return null;
+  }
+
   const safetyTokens = raw["safety-tokens"] ?? 512;
   const overlapMessages = raw["overlap-messages"] ?? 0;
   const maxDepth = raw["max-depth"] ?? 4;
@@ -349,6 +365,7 @@ function resolveChunking(
 
   return {
     contextWindow,
+    estimationCharsPerToken,
     safetyTokens,
     overlapMessages,
     maxDepth,
@@ -400,8 +417,8 @@ function buildUserPrompt(
 }
 
 /** Tokens consumed by the prompt scaffolding, excluding the conversation. */
-function promptOverheadTokens(prompt: PromptConfig): number {
-  return estimateTextTokens(prompt.system) + estimateTextTokens(buildUserPrompt(prompt, "", undefined));
+function promptOverheadTokens(prompt: PromptConfig, charsPerToken = CHARS_PER_TOKEN): number {
+  return estimateTextTokens(prompt.system, charsPerToken) + estimateTextTokens(buildUserPrompt(prompt, "", undefined), charsPerToken);
 }
 
 /**
@@ -515,9 +532,12 @@ export default function (pi: ExtensionAPI) {
 			.filter((text) => text.length > 0);
 		const conversationText = pieces.join("\n\n");
 
-		const conversationTokens = estimateTextTokens(conversationText);
-		const previousSummaryTokens = previousSummary ? estimateTextTokens(previousSummary) : 0;
-		const inputTokens = conversationTokens + previousSummaryTokens + promptOverheadTokens(resolvedConfig.prompt);
+		// Estimator ratio: use the model-specific chars/token when chunking is on,
+		// so budgets match the compaction model's real tokenizer. Default 4 otherwise.
+		const est = resolvedConfig.chunking ? resolvedConfig.chunking.estimationCharsPerToken : CHARS_PER_TOKEN;
+		const conversationTokens = estimateTextTokens(conversationText, est);
+		const previousSummaryTokens = previousSummary ? estimateTextTokens(previousSummary, est) : 0;
+		const inputTokens = conversationTokens + previousSummaryTokens + promptOverheadTokens(resolvedConfig.prompt, est);
 
 		ctx.ui.notify(
 			`Custom compaction: ${allMessages.length} messages, ~${inputTokens.toLocaleString()} input tokens ` +
@@ -639,7 +659,7 @@ export default function (pi: ExtensionAPI) {
 				? computeChunkBudget({
 						contextWindow: chunking.contextWindow,
 						responseTokens,
-						overheadTokens: promptOverheadTokens(resolvedConfig.prompt),
+						overheadTokens: promptOverheadTokens(resolvedConfig.prompt, est),
 						safetyTokens: chunking.safetyTokens,
 					})
 				: Number.POSITIVE_INFINITY;
@@ -663,7 +683,7 @@ export default function (pi: ExtensionAPI) {
 			}
 
 			// Map phase: one summary per chunk that fits the model.
-			const mapTexts = splitPieces(pieces, mapBudget, chunking.overlapMessages);
+			const mapTexts = splitPieces(pieces, mapBudget, chunking.overlapMessages, est);
 			log(`Chunked compaction: ${mapTexts.length} map chunks, budget ${mapBudget}`);
 			ctx.ui.notify(
 				`Custom compaction: transcript exceeds ${model.id} context, summarizing in ${mapTexts.length} chunks...`,
@@ -686,7 +706,7 @@ export default function (pi: ExtensionAPI) {
 			const reduceBudget = computeChunkBudget({
 				contextWindow: chunking.contextWindow,
 				responseTokens,
-				overheadTokens: promptOverheadTokens(chunking.chunkingPrompt),
+				overheadTokens: promptOverheadTokens(chunking.chunkingPrompt, est),
 				safetyTokens: chunking.safetyTokens,
 			});
 			if (reduceBudget <= 0) {
@@ -703,7 +723,7 @@ export default function (pi: ExtensionAPI) {
 					return;
 				}
 				depth += 1;
-				const batches = splitPieces(partials, reduceBudget, 0);
+				const batches = splitPieces(partials, reduceBudget, 0, est);
 				const next: string[] = [];
 				for (const batch of batches) {
 					if (signal.aborted) return;
@@ -721,7 +741,7 @@ export default function (pi: ExtensionAPI) {
 			// Final merge with the previous summary, when it fits.
 			let summary = partials[0];
 			if (chunking.chunkingPrompt.includePreviousSummary && previousSummary) {
-				if (reduceBudget - previousSummaryTokens > estimateTextTokens(summary)) {
+				if (reduceBudget - previousSummaryTokens > estimateTextTokens(summary, est)) {
 					const result = await callModel(
 						chunking.chunkingPrompt.system,
 						buildUserPrompt(chunking.chunkingPrompt, summary, previousSummary),

@@ -30,11 +30,14 @@ export interface BudgetInputs {
 }
 
 /**
- * Estimates tokens in a text. Conservative for prose, exact enough for
- * budgeting because `safety-tokens` absorbs the error.
+ * Estimates tokens in a text. `charsPerToken` is the model-specific ratio.
+ * The default of 4 is conservative for prose and underestimates dense code;
+ * lower it (e.g. 3) for tokenizers that average fewer characters per token.
+ * `safety-tokens` absorbs the remaining error.
  */
-export function estimateTextTokens(text: string): number {
-  return Math.ceil(text.length / CHARS_PER_TOKEN);
+export function estimateTextTokens(text: string, charsPerToken = CHARS_PER_TOKEN): number {
+  const ratio = charsPerToken > 0 ? charsPerToken : CHARS_PER_TOKEN;
+  return Math.ceil(text.length / ratio);
 }
 
 /**
@@ -54,8 +57,9 @@ export function computeChunkBudget(inputs: BudgetInputs): number {
  * Truncates a text to a token budget, keeping the head and the tail and
  * eliding the middle. Structure sits at the start and errors sit at the end.
  */
-export function truncateHeadTail(text: string, maxTokens: number): string {
-  const maxChars = Math.max(0, maxTokens) * CHARS_PER_TOKEN;
+export function truncateHeadTail(text: string, maxTokens: number, charsPerToken = CHARS_PER_TOKEN): string {
+  const ratio = charsPerToken > 0 ? charsPerToken : CHARS_PER_TOKEN;
+  const maxChars = Math.max(0, maxTokens) * ratio;
   if (text.length <= maxChars) return text;
 
   const markerOverhead = OMISSION_PREFIX.length + OMISSION_SUFFIX.length + OMISSION_DIGITS;
@@ -79,12 +83,14 @@ export function splitPieces(
   pieces: string[],
   budgetTokens: number,
   overlapMessages = 0,
+  charsPerToken = CHARS_PER_TOKEN,
 ): string[] {
   const chunks: string[] = [];
   if (pieces.length === 0) return chunks;
 
   const budget = Math.max(1, Math.floor(budgetTokens));
   const overlap = Math.max(0, Math.floor(overlapMessages));
+  const ratio = charsPerToken > 0 ? charsPerToken : CHARS_PER_TOKEN;
 
   let cursor = 0;
   while (cursor < pieces.length) {
@@ -94,10 +100,10 @@ export function splitPieces(
     let j = start;
 
     while (j < pieces.length) {
-      const pieceTokens = estimateTextTokens(pieces[j]);
+      const pieceTokens = estimateTextTokens(pieces[j], ratio);
 
       if (group.length === 0 && pieceTokens > budget) {
-        group.push(truncateHeadTail(pieces[j], budget));
+        group.push(truncateHeadTail(pieces[j], budget, ratio));
         j += 1;
         break;
       }

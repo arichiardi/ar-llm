@@ -353,6 +353,7 @@ describe("loadConfig", () => {
 			const chunking = config.chunking;
 			assert.ok(chunking);
 			assert.equal(chunking.contextWindow, 32768);
+			assert.equal(chunking.estimationCharsPerToken, 4);
 			assert.equal(chunking.safetyTokens, 512);
 			assert.equal(chunking.overlapMessages, 0);
 			assert.equal(chunking.maxDepth, 4);
@@ -367,6 +368,7 @@ describe("loadConfig", () => {
 						model: "m",
 						chunking: {
 							"context-window": 32768,
+							"estimation-chars-per-token": 3,
 							"safety-tokens": 1024,
 							"overlap-messages": 2,
 							"max-depth": 6,
@@ -380,6 +382,7 @@ describe("loadConfig", () => {
 			assert.ok(config);
 			const chunking = config.chunking;
 			assert.ok(chunking);
+			assert.equal(chunking.estimationCharsPerToken, 3);
 			assert.equal(chunking.safetyTokens, 1024);
 			assert.equal(chunking.overlapMessages, 2);
 			assert.equal(chunking.maxDepth, 6);
@@ -395,6 +398,21 @@ describe("loadConfig", () => {
 			assert.ok(config);
 			assert.equal(config.chunking, null);
 			assert.match(errors.join("\n"), /chunking\.context-window/);
+		});
+
+		it("disables chunking when estimation-chars-per-token is not positive and warns", () => {
+			const errors = captureErrors();
+			writeTmpConfig({
+				providers: {
+					[PROVIDER]: { model: "m", chunking: { "context-window": 32768, "estimation-chars-per-token": 0 } },
+				},
+			});
+
+			const config = loadConfig(PROVIDER);
+
+			assert.ok(config);
+			assert.equal(config.chunking, null);
+			assert.match(errors.join("\n"), /chunking\.estimation-chars-per-token/);
 		});
 	});
 });

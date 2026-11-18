@@ -19,16 +19,26 @@ pi -e 'npm:@ar-llm/pi-handoff'
 ## Config
 
 Optional config file: `~/.config/pi/agent/ar-llm/handoff.json`.
-It selects which model summarizes the handoff (typically a cheaper model than
-the active session model) and optionally overrides the system prompt and
-per-model compat flags. With no config, the active session model is used.
+It selects the model that summarizes the handoff, keyed by the active session
+provider. Each provider points at a model, usually a cheaper one. With no entry
+for the session provider, the active session model is used.
 
 ```json
 {
-  "provider": {
+  "providers": {
     "github-copilot": {
-      "claude-haiku-4-5": {
-        "compat": { "forceAdaptiveThinking": false }
+      "model": "claude-haiku-4-5",
+      "compat": { "forceAdaptiveThinking": false }
+    },
+    "llama.cpp": {
+      "model": "Qwen3.8-27B",
+      "compat": {
+        "supportsStore": false,
+        "supportsDeveloperRole": false,
+        "supportsReasoningEffort": false,
+        "supportsUsageInStreaming": true,
+        "supportsStrictMode": false,
+        "maxTokensField": "max_tokens"
       }
     }
   },
@@ -36,28 +46,15 @@ per-model compat flags. With no config, the active session model is used.
 }
 ```
 
-Compat flags depend on the model's API. `forceAdaptiveThinking` only applies to
-Anthropic Messages-compatible models. llama.cpp serves the OpenAI completions
-API, so its flags look like this:
+### Provider fields
 
-```json
-{
-  "provider": {
-    "llama.cpp": {
-      "Qwen3.8-27B": {
-        "compat": {
-          "supportsStore": false,
-          "supportsDeveloperRole": false,
-          "supportsReasoningEffort": false,
-          "supportsUsageInStreaming": true,
-          "supportsStrictMode": false,
-          "maxTokensField": "max_tokens"
-        }
-      }
-    }
-  }
-}
-```
+| Field | Type | Description |
+|-------|------|-------------|
+| `model` | `string` | Model id for the summary within the session provider. Required for an entry to apply. |
+| `compat` | `object` | Compatibility overrides for the selected model. |
+
+Compat flags depend on the model's API. `forceAdaptiveThinking` only applies to
+Anthropic Messages-compatible models.
 
 Debug logging: set `PI_HANDOFF_DEBUG=1` to log to `$TMPDIR/ar-llm/pi-handoff.log`.
 

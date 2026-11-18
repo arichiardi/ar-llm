@@ -16,7 +16,8 @@
 	"files": [
 		"src",
 		"README.md",
-		"LICENSE"
+		"LICENSE",
+		"test"
 	],
 	"pi": {
 		"extensions": [
@@ -24,7 +25,8 @@
 		]
 	},
 	"scripts": {
-		"typecheck": "tsc --noEmit"
+		"typecheck": "tsc --noEmit",
+		"test": "node --import ./test/register.mjs --test test/config.test.ts"
 	},
 	"peerDependencies": {
 		"@earendil-works/pi-agent-core": "*",

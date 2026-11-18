@@ -37,41 +37,35 @@
  * The generated prompt appears as a draft in the editor for review/editing.
  *
  * Config file (optional): ~/.config/pi/agent/ar-llm/handoff.json
- * Selects which model summarizes the handoff (typically a cheaper model than
- * the active session model) and optionally overrides the system prompt and
- * per-model compat flags.
+ * Selects the model that summarizes the handoff, keyed by the active session
+ * provider. Each provider typically points at a cheaper model than the active
+ * session model. A provider with no entry falls back to the active session
+ * model.
  *
  * Example:
  *   {
- *     "provider": {
+ *     "providers": {
  *       "github-copilot": {
- *         "claude-haiku-4-5": {
- *           "compat": { "forceAdaptiveThinking": false }
+ *         "model": "claude-haiku-4-5",
+ *         "compat": { "forceAdaptiveThinking": false }
+ *       },
+ *       "llama.cpp": {
+ *         "model": "Qwen3.8-27B",
+ *         "compat": {
+ *           "supportsStore": false,
+ *           "supportsDeveloperRole": false,
+ *           "supportsReasoningEffort": false,
+ *           "supportsUsageInStreaming": true,
+ *           "supportsStrictMode": false,
+ *           "maxTokensField": "max_tokens"
  *         }
  *       }
  *     },
  *     "system-prompt": "Custom summarization prompt..."
  *   }
  *
- * llama.cpp serves the OpenAI completions API, so its compat flags differ
- * (forceAdaptiveThinking does not apply to it):
- *
- *   {
- *     "provider": {
- *       "llama.cpp": {
- *         "Qwen3.8-27B": {
- *           "compat": {
- *             "supportsStore": false,
- *             "supportsDeveloperRole": false,
- *             "supportsReasoningEffort": false,
- *             "supportsUsageInStreaming": true,
- *             "supportsStrictMode": false,
- *             "maxTokensField": "max_tokens"
- *           }
- *         }
- *       }
- *     }
- *   }
+ * Compatibility flags depend on the model's API. forceAdaptiveThinking only
+ * applies to Anthropic Messages-compatible models.
  *
  * Debug logging: set PI_HANDOFF_DEBUG=1 to log to $TMPDIR/ar-llm/pi-handoff.log
  */
@@ -89,9 +83,17 @@ import { BorderedLoader, convertToLlm, serializeConversation } from "@earendil-w
 // Configuration types
 // ============================================================
 
-interface HandoffConfig {
-	/** Provider-specific model overrides (compat, etc.) keyed by provider. */
-	"provider"?: Record<string, Record<string, { compat?: Record<string, unknown> }>>;
+/** Config for a single provider, keyed by the active session provider. */
+export interface ProviderConfig {
+	/** Model id to use for handoff summarization within this provider. */
+	model?: string;
+	/** Compatibility overrides applied to the selected model. */
+	compat?: Record<string, unknown>;
+}
+
+export interface HandoffConfig {
+	/** Per-provider handoff settings, keyed by session provider. */
+	providers?: Record<string, ProviderConfig>;
 	/** Override the system prompt used for summarization. */
 	"system-prompt"?: string;
 }
@@ -105,7 +107,7 @@ function resolveConfigDir(): string {
 		|| path.join(os.homedir(), ".config", "pi", "agent");
 }
 
-function loadConfig(): HandoffConfig | null {
+export function loadConfig(): HandoffConfig | null {
 	const dir = resolveConfigDir();
 	const filePath = path.join(dir, "ar-llm", "handoff.json");
 
@@ -114,8 +116,57 @@ function loadConfig(): HandoffConfig | null {
 	}
 
 	const raw = fs.readFileSync(filePath, "utf-8");
-	return JSON.parse(raw) as HandoffConfig;
+	const parsed = JSON.parse(raw) as HandoffConfig & { provider?: unknown };
+	if (parsed.provider && !parsed.providers) {
+		log('legacy "provider" config shape ignored; rename it to "providers" and add a "model" field');
+	}
+	return parsed;
 }
+
+/** The handoff model resolved for one session provider. */
+export interface ResolvedProviderConfig {
+	provider: string;
+	model: string;
+	compat: Record<string, unknown>;
+}
+
+/**
+ * Resolve the handoff config for the active session provider. Returns null when
+ * the config has no entry for that provider, in which case the caller falls
+ * back to the active session model.
+ */
+export function resolveProviderConfig(
+	config: HandoffConfig | null,
+	sessionProvider: string,
+): ResolvedProviderConfig | null {
+	const entry = config?.providers?.[sessionProvider];
+	if (!entry?.model) {
+		return null;
+	}
+	return {
+		provider: sessionProvider,
+		model: entry.model,
+		compat: entry.compat ?? {},
+	};
+}
+
+// ============================================================
+// Debug logging
+// ============================================================
+
+const DEBUG = process.env.PI_HANDOFF_DEBUG === "1" || process.env.PI_HANDOFF_DEBUG === "true";
+const AR_LLM_TMP = path.join(os.tmpdir(), "ar-llm");
+const DEBUG_LOG = path.join(AR_LLM_TMP, "pi-handoff.log");
+
+function log(msg: string) {
+	if (!DEBUG) return;
+	fs.mkdirSync(AR_LLM_TMP, { recursive: true });
+	fs.appendFileSync(DEBUG_LOG, `${new Date().toISOString()} ${msg}\n`);
+}
+
+// ============================================================
+// Loaded config
+// ============================================================
 
 let CONFIG: HandoffConfig | null = null;
 try {
@@ -152,20 +203,6 @@ Files involved:
 [Clear description of what to do next based on user's goal]`;
 
 const SYSTEM_PROMPT = CONFIG?.["system-prompt"] ?? DEFAULT_SYSTEM_PROMPT;
-
-// ============================================================
-// Debug logging
-// ============================================================
-
-const DEBUG = process.env.PI_HANDOFF_DEBUG === "1" || process.env.PI_HANDOFF_DEBUG === "true";
-const AR_LLM_TMP = path.join(os.tmpdir(), "ar-llm");
-const DEBUG_LOG = path.join(AR_LLM_TMP, "pi-handoff.log");
-
-function log(msg: string) {
-	if (!DEBUG) return;
-	fs.mkdirSync(AR_LLM_TMP, { recursive: true });
-	fs.appendFileSync(DEBUG_LOG, `${new Date().toISOString()} ${msg}\n`);
-}
 
 // ============================================================
 // Session entry helpers
@@ -233,27 +270,25 @@ export default function (pi: ExtensionAPI) {
 				return;
 			}
 
-			// Resolve the model to use for summarization. Config is optional:
-			// if a provider/model is configured, use it (typically a cheaper model);
-			// otherwise fall back to the active session model.
-			const providerKey = CONFIG?.provider ? Object.keys(CONFIG.provider)[0] : undefined;
-			const modelKey =
-				providerKey && CONFIG?.provider ? Object.keys(CONFIG.provider[providerKey] ?? {})[0] : undefined;
+			// Resolve the summarizer for the active session provider. Config is
+			// optional: when the provider has an entry, use its model (typically a
+			// cheaper one); otherwise fall back to the active session model.
+			const resolved = resolveProviderConfig(CONFIG, ctx.model.provider);
 
 			let handoffModel = ctx.model;
-			if (providerKey && modelKey) {
-				const configured = ctx.modelRegistry.find(providerKey, modelKey);
+			if (resolved) {
+				const configured = ctx.modelRegistry.find(resolved.provider, resolved.model);
 				if (configured) {
 					handoffModel = configured;
 				} else {
 					// Model not found (removed/unregistered or name changed).
 					// Silently fall back to active session model instead of blocking.
-					log(`Configured handoff model ${providerKey}/${modelKey} not found; using active session model`);
+					log(`Configured handoff model ${resolved.provider}/${resolved.model} not found; using active session model`);
 				}
 			}
-			const compatOverride = providerKey && modelKey ? (CONFIG?.provider?.[providerKey]?.[modelKey]?.compat ?? {}) : {};
+			const compatOverride = resolved?.compat ?? {};
 			log(
-				`handoff model: ${handoffModel.provider}/${handoffModel.id} (${providerKey && modelKey ? "configured" : "active session model"}), compatOverride: ${JSON.stringify(compatOverride)}`,
+				`handoff model: ${handoffModel.provider}/${handoffModel.id} (${resolved ? "configured" : "active session model"}), compatOverride: ${JSON.stringify(compatOverride)}`,
 			);
 
 			// Gather conversation context from current branch. If the branch was compacted,

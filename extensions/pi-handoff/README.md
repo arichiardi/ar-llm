@@ -32,6 +32,10 @@ for the session provider, the active session model is used.
     },
     "llama.cpp": {
       "model": "Qwen3.8-27B",
+      "max-output-tokens": 4096,
+      "request-params": {
+        "chat_template_kwargs": { "enable_thinking": true }
+      },
       "compat": {
         "supportsStore": false,
         "supportsDeveloperRole": false,
@@ -51,6 +55,7 @@ for the session provider, the active session model is used.
 | Field | Type | Description |
 |-------|------|-------------|
 | `model` | `string` | Model id for the summary within the session provider. Required for an entry to apply. |
+| `max-output-tokens` | `number` | Response ceiling for the summary. Defaults to the model's own `maxTokens`. Overrides `stream-options.maxTokens`. |
 | `stream-options` | `object` | pi `StreamOptions` fields, merged over the defaults. |
 | `request-params` | `object` | Raw request-body keys, forwarded as `StreamOptions.samplingParams`. |
 | `compat` | `object` | Compatibility overrides for the selected model. |

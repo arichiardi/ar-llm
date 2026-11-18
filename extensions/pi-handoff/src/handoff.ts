@@ -74,6 +74,7 @@
  *     "providers": {
  *       "llama.cpp": {
  *         "model": "Qwen3.8-27B",
+ *         "max-output-tokens": 4096,
  *         "request-params": { "chat_template_kwargs": { "enable_thinking": true } }
  *       },
  *       "anthropic": {
@@ -84,7 +85,8 @@
  *   }
  *
  * `stream-options` holds pi StreamOptions fields. `request-params` holds raw
- * request-body keys and is forwarded as `samplingParams`.
+ * request-body keys and is forwarded as `samplingParams`. `max-output-tokens`
+ * caps the summary and defaults to the model's own maxTokens.
  *
  * Debug logging: set PI_HANDOFF_DEBUG=1 to log to $TMPDIR/ar-llm/pi-handoff.log
  */
@@ -106,6 +108,11 @@ import { BorderedLoader, convertToLlm, serializeConversation } from "@earendil-w
 export interface ProviderConfig {
 	/** Model id to use for handoff summarization within this provider. */
 	model?: string;
+	/**
+	 * Response ceiling for the summary. Defaults to the model's own maxTokens.
+	 * Overrides `stream-options.maxTokens` when both are set.
+	 */
+	"max-output-tokens"?: number;
 	/**
 	 * pi StreamOptions fields, merged over the defaults. Use this for pi-native
 	 * options such as `thinkingEnabled`, `reasoningEffort`, or `temperature`.
@@ -158,8 +165,21 @@ export interface ResolvedProviderConfig {
 	provider: string;
 	model: string;
 	compat: Record<string, unknown>;
+	maxOutputTokens?: number;
 	streamOptions: Record<string, unknown>;
 	requestParams: Record<string, unknown>;
+}
+
+/** Validate a `max-output-tokens` value. Returns undefined for invalid input. */
+function validateMaxOutputTokens(provider: string, value: unknown): number | undefined {
+	if (value === undefined) {
+		return undefined;
+	}
+	if (!Number.isSafeInteger(value) || (value as number) <= 0) {
+		log(`provider "${provider}": invalid "max-output-tokens" (${String(value)}); expected a positive integer, ignored`);
+		return undefined;
+	}
+	return value as number;
 }
 
 /**
@@ -179,6 +199,7 @@ export function resolveProviderConfig(
 		provider: sessionProvider,
 		model: entry.model,
 		compat: entry.compat ?? {},
+		maxOutputTokens: validateMaxOutputTokens(sessionProvider, entry["max-output-tokens"]),
 		streamOptions: entry["stream-options"] ?? {},
 		requestParams: entry["request-params"] ?? {},
 	};
@@ -194,7 +215,8 @@ export interface HandoffCallBase {
  * Build the options passed to runtime.complete() for the summarizer call.
  *
  * Defaults: no thinking, no prompt cache. `stream-options` merges over the
- * defaults and may turn thinking on. `request-params` is forwarded as
+ * defaults and may turn thinking on. `max-output-tokens` overrides
+ * `stream-options.maxTokens`. `request-params` is forwarded as
  * `samplingParams`, the raw request-body channel.
  */
 export function buildCallOptions(
@@ -208,6 +230,9 @@ export function buildCallOptions(
 		thinkingEnabled: false,
 		...(resolved?.streamOptions ?? {}),
 	};
+	if (resolved?.maxOutputTokens !== undefined) {
+		options.maxTokens = resolved.maxOutputTokens;
+	}
 	const requestParams = resolved?.requestParams ?? {};
 	if (Object.keys(requestParams).length > 0) {
 		options.samplingParams = requestParams;

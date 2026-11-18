@@ -1,5 +1,5 @@
 /**
- * Unit tests for handoff config loading, provider resolution, and option building.
+ * Unit tests for handoff config loading and option building.
  *
  * Run with:  node --import ./test/register.mjs --test test/config.test.ts
  */
@@ -52,6 +52,7 @@ describe("resolveProviderConfig", () => {
 		providers: {
 			"pelagic-ai": {
 				model: "google/gemma4-moe",
+				"max-output-tokens": 4096,
 				"stream-options": { thinkingEnabled: true },
 				"request-params": { chat_template_kwargs: { enable_thinking: false } },
 				compat: { supportsStore: false },
@@ -64,6 +65,7 @@ describe("resolveProviderConfig", () => {
 		const resolved = resolveProviderConfig(config, "pelagic-ai");
 		assert.equal(resolved?.provider, "pelagic-ai");
 		assert.equal(resolved?.model, "google/gemma4-moe");
+		assert.equal(resolved?.maxOutputTokens, 4096);
 		assert.deepEqual(resolved?.streamOptions, { thinkingEnabled: true });
 		assert.deepEqual(resolved?.requestParams, { chat_template_kwargs: { enable_thinking: false } });
 		assert.deepEqual(resolved?.compat, { supportsStore: false });
@@ -77,7 +79,18 @@ describe("resolveProviderConfig", () => {
 		assert.equal(resolveProviderConfig(config, "empty"), null);
 	});
 
-	it("defaults stream-options, request-params, and compat to empty objects", () => {
+	it("ignores a non-positive or non-integer max-output-tokens", () => {
+		assert.equal(
+			resolveProviderConfig({ providers: { p: { model: "m", "max-output-tokens": 0 } } }, "p")?.maxOutputTokens,
+			undefined,
+		);
+		assert.equal(
+			resolveProviderConfig({ providers: { p: { model: "m", "max-output-tokens": 1.5 } } }, "p")?.maxOutputTokens,
+			undefined,
+		);
+	});
+
+	it("defaults stream-options and request-params to empty objects", () => {
 		const resolved = resolveProviderConfig({ providers: { p: { model: "m" } } }, "p");
 		assert.deepEqual(resolved?.streamOptions, {});
 		assert.deepEqual(resolved?.requestParams, {});
@@ -94,6 +107,7 @@ describe("buildCallOptions", () => {
 		assert.equal(options.cacheRetention, "none");
 		assert.equal(options.signal, base.signal);
 		assert.equal(options.sessionId, "sess-1");
+		assert.equal(options.maxTokens, undefined);
 		assert.equal(options.samplingParams, undefined);
 	});
 
@@ -105,6 +119,14 @@ describe("buildCallOptions", () => {
 		const options = buildCallOptions(resolved, base);
 		assert.equal(options.thinkingEnabled, true);
 		assert.equal(options.temperature, 0.2);
+	});
+
+	it("lets max-output-tokens override stream-options.maxTokens", () => {
+		const resolved = resolveProviderConfig(
+			{ providers: { p: { model: "m", "max-output-tokens": 2048, "stream-options": { maxTokens: 999 } } } },
+			"p",
+		);
+		assert.equal(buildCallOptions(resolved, base).maxTokens, 2048);
 	});
 
 	it("forwards request-params as samplingParams", () => {

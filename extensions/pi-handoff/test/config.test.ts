@@ -119,6 +119,8 @@ describe("buildCallOptions", () => {
 		const options = buildCallOptions(resolved, base);
 		assert.equal(options.thinkingEnabled, true);
 		assert.equal(options.temperature, 0.2);
+		// Also in samplingParams, so it beats the model's own sampling params.
+		assert.equal((options.samplingParams as Record<string, unknown>).temperature, 0.2);
 	});
 
 	it("lets max-output-tokens override stream-options.maxTokens", () => {
@@ -127,6 +129,26 @@ describe("buildCallOptions", () => {
 			"p",
 		);
 		assert.equal(buildCallOptions(resolved, base).maxTokens, 2048);
+	});
+
+	it("overrides temperature from request-params and copies it into samplingParams", () => {
+		const resolved = resolveProviderConfig(
+			{ providers: { p: { model: "m", "request-params": { temperature: 0.3 } } } },
+			"p",
+		);
+		const options = buildCallOptions(resolved, base);
+		assert.equal(options.temperature, 0.3);
+		assert.equal((options.samplingParams as Record<string, unknown>).temperature, 0.3);
+	});
+
+	it("lets request-params.temperature win over stream-options.temperature", () => {
+		const resolved = resolveProviderConfig(
+			{ providers: { p: { model: "m", "stream-options": { temperature: 0.9 }, "request-params": { temperature: 0.3 } } } },
+			"p",
+		);
+		const options = buildCallOptions(resolved, base);
+		assert.equal(options.temperature, 0.3);
+		assert.equal((options.samplingParams as Record<string, unknown>).temperature, 0.3);
 	});
 
 	it("forwards request-params as samplingParams", () => {

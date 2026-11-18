@@ -86,7 +86,9 @@
  *
  * `stream-options` holds pi StreamOptions fields. `request-params` holds raw
  * request-body keys and is forwarded as `samplingParams`. `max-output-tokens`
- * caps the summary and defaults to the model's own maxTokens.
+ * caps the summary and defaults to the model's own maxTokens. `temperature`
+ * may go in either block; `request-params` wins, and either value overrides
+ * the model default from pi.
  *
  * Debug logging: set PI_HANDOFF_DEBUG=1 to log to $TMPDIR/ar-llm/pi-handoff.log
  */
@@ -218,6 +220,11 @@ export interface HandoffCallBase {
  * defaults and may turn thinking on. `max-output-tokens` overrides
  * `stream-options.maxTokens`. `request-params` is forwarded as
  * `samplingParams`, the raw request-body channel.
+ *
+ * Temperature may come from either block. Handoff copies the effective value
+ * into both the pi option and `samplingParams`, so it overrides the model's
+ * own sampling params. Precedence: request-params, then stream-options, then
+ * the pi model default.
  */
 export function buildCallOptions(
 	resolved: ResolvedProviderConfig | null,
@@ -233,7 +240,18 @@ export function buildCallOptions(
 	if (resolved?.maxOutputTokens !== undefined) {
 		options.maxTokens = resolved.maxOutputTokens;
 	}
-	const requestParams = resolved?.requestParams ?? {};
+
+	const requestParams: Record<string, unknown> = { ...(resolved?.requestParams ?? {}) };
+	// Temperature may come from stream-options (pi-native) or request-params
+	// (raw). request-params wins. pi applies the model's own samplingParams
+	// after the named temperature field, so write the effective value into
+	// samplingParams too. That makes the handoff config override the model
+	// default. The pi option stays for APIs that read it, such as Anthropic.
+	const temperature = requestParams.temperature ?? options.temperature;
+	if (temperature !== undefined) {
+		options.temperature = temperature;
+		requestParams.temperature = temperature;
+	}
 	if (Object.keys(requestParams).length > 0) {
 		options.samplingParams = requestParams;
 	}

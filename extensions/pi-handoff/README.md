@@ -86,6 +86,30 @@ API, because servers differ. Use `request-params` for raw body keys and
 model, such as `chat_template_kwargs`, `reasoning_effort`, `top_p`, `top_k`,
 or `min_p`.
 
+### Temperature
+
+pi takes the model's temperature from its own sampling params and applies them
+last. Handoff overrides that value for the summary call. Set it either way:
+
+- `request-params.temperature` - forwarded as `samplingParams`, the channel pi
+  merges after the model default. This is the canonical override.
+- `stream-options.temperature` - the pi-native option. Handoff copies it into
+  `samplingParams` too, so it also beats the model default.
+
+When both are set, `request-params` wins. Precedence is `request-params` >
+`stream-options` > the pi model default.
+
+```json
+{
+  "providers": {
+    "pelagic-ai": {
+      "model": "google/gemma4-moe",
+      "request-params": { "temperature": 0.3 }
+    }
+  }
+}
+```
+
 Compat flags depend on the model's API. `forceAdaptiveThinking` only applies to
 Anthropic Messages-compatible models.
 

@@ -67,6 +67,25 @@
  * Compatibility flags depend on the model's API. forceAdaptiveThinking only
  * applies to Anthropic Messages-compatible models.
  *
+ * Thinking is off by default. Turn it on per provider with the raw request
+ * params or stream options that the provider's API uses:
+ *
+ *   {
+ *     "providers": {
+ *       "llama.cpp": {
+ *         "model": "Qwen3.8-27B",
+ *         "request-params": { "chat_template_kwargs": { "enable_thinking": true } }
+ *       },
+ *       "anthropic": {
+ *         "model": "claude-haiku-4-5",
+ *         "stream-options": { "thinkingEnabled": true }
+ *       }
+ *     }
+ *   }
+ *
+ * `stream-options` holds pi StreamOptions fields. `request-params` holds raw
+ * request-body keys and is forwarded as `samplingParams`.
+ *
  * Debug logging: set PI_HANDOFF_DEBUG=1 to log to $TMPDIR/ar-llm/pi-handoff.log
  */
 
@@ -87,6 +106,17 @@ import { BorderedLoader, convertToLlm, serializeConversation } from "@earendil-w
 export interface ProviderConfig {
 	/** Model id to use for handoff summarization within this provider. */
 	model?: string;
+	/**
+	 * pi StreamOptions fields, merged over the defaults. Use this for pi-native
+	 * options such as `thinkingEnabled`, `reasoningEffort`, or `temperature`.
+	 */
+	"stream-options"?: Record<string, unknown>;
+	/**
+	 * Raw provider request-body parameters, forwarded as StreamOptions.samplingParams.
+	 * Use this for keys pi does not model, such as `chat_template_kwargs`,
+	 * `reasoning_effort`, `top_p`, `top_k`, or `min_p`.
+	 */
+	"request-params"?: Record<string, unknown>;
 	/** Compatibility overrides applied to the selected model. */
 	compat?: Record<string, unknown>;
 }
@@ -128,6 +158,8 @@ export interface ResolvedProviderConfig {
 	provider: string;
 	model: string;
 	compat: Record<string, unknown>;
+	streamOptions: Record<string, unknown>;
+	requestParams: Record<string, unknown>;
 }
 
 /**
@@ -147,7 +179,43 @@ export function resolveProviderConfig(
 		provider: sessionProvider,
 		model: entry.model,
 		compat: entry.compat ?? {},
+		streamOptions: entry["stream-options"] ?? {},
+		requestParams: entry["request-params"] ?? {},
 	};
+}
+
+/** Session-scoped values that the config must not override. */
+export interface HandoffCallBase {
+	signal: AbortSignal;
+	sessionId: string;
+}
+
+/**
+ * Build the options passed to runtime.complete() for the summarizer call.
+ *
+ * Defaults: no thinking, no prompt cache. `stream-options` merges over the
+ * defaults and may turn thinking on. `request-params` is forwarded as
+ * `samplingParams`, the raw request-body channel.
+ */
+export function buildCallOptions(
+	resolved: ResolvedProviderConfig | null,
+	base: HandoffCallBase,
+): Record<string, unknown> {
+	// Default thinking off. Summarization is a simple text task, and adaptive or
+	// budget thinking breaks providers that do not support it.
+	const options: Record<string, unknown> = {
+		cacheRetention: "none",
+		thinkingEnabled: false,
+		...(resolved?.streamOptions ?? {}),
+	};
+	const requestParams = resolved?.requestParams ?? {};
+	if (Object.keys(requestParams).length > 0) {
+		options.samplingParams = requestParams;
+	}
+	// signal and sessionId are per-call and must win over any config value.
+	options.signal = base.signal;
+	options.sessionId = base.sessionId;
+	return options;
 }
 
 // ============================================================
@@ -353,15 +421,7 @@ export default function (pi: ExtensionAPI) {
 					const response = await runtime.complete(
 						handoffModelForCall,
 						{ systemPrompt: SYSTEM_PROMPT, messages: [userMessage] },
-						{
-							signal: loader.signal,
-							cacheRetention: "none",
-							sessionId: uuidv7(),
-							// Disable thinking: handoff summarization is a simple text task
-							// and adaptive/budget thinking causes errors on providers that
-							// don't support it (e.g. github-copilot).
-							thinkingEnabled: false,
-						},
+						buildCallOptions(resolved, { signal: loader.signal, sessionId: uuidv7() }),
 					);
 
 					log(`complete() done: stopReason=${response.stopReason}, contentParts=${response.content.length}`);

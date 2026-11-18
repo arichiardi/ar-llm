@@ -51,7 +51,35 @@ for the session provider, the active session model is used.
 | Field | Type | Description |
 |-------|------|-------------|
 | `model` | `string` | Model id for the summary within the session provider. Required for an entry to apply. |
+| `stream-options` | `object` | pi `StreamOptions` fields, merged over the defaults. |
+| `request-params` | `object` | Raw request-body keys, forwarded as `StreamOptions.samplingParams`. |
 | `compat` | `object` | Compatibility overrides for the selected model. |
+
+### Thinking
+
+Thinking is off by default. Turn it on with the mechanism of the provider's
+API, because servers differ. Use `request-params` for raw body keys and
+`stream-options` for pi-native fields:
+
+```json
+{
+  "providers": {
+    "llama.cpp": {
+      "model": "Qwen3.8-27B",
+      "request-params": { "chat_template_kwargs": { "enable_thinking": true } }
+    },
+    "anthropic": {
+      "model": "claude-haiku-4-5",
+      "stream-options": { "thinkingEnabled": true }
+    }
+  }
+}
+```
+
+`stream-options` holds pi `StreamOptions` fields such as `thinkingEnabled`,
+`reasoningEffort`, or `temperature`. `request-params` holds keys pi does not
+model, such as `chat_template_kwargs`, `reasoning_effort`, `top_p`, `top_k`,
+or `min_p`.
 
 Compat flags depend on the model's API. `forceAdaptiveThinking` only applies to
 Anthropic Messages-compatible models.

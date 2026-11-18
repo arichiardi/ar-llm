@@ -1,5 +1,5 @@
 /**
- * Unit tests for handoff config loading and provider resolution.
+ * Unit tests for handoff config loading, provider resolution, and option building.
  *
  * Run with:  node --import ./test/register.mjs --test test/config.test.ts
  */
@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { loadConfig, resolveProviderConfig, type HandoffConfig } from "../src/handoff.js";
+import { loadConfig, resolveProviderConfig, buildCallOptions, type HandoffConfig } from "../src/handoff.js";
 
 const tmpDirs: string[] = [];
 
@@ -52,6 +52,8 @@ describe("resolveProviderConfig", () => {
 		providers: {
 			"pelagic-ai": {
 				model: "google/gemma4-moe",
+				"stream-options": { thinkingEnabled: true },
+				"request-params": { chat_template_kwargs: { enable_thinking: false } },
 				compat: { supportsStore: false },
 			},
 			empty: {},
@@ -62,6 +64,8 @@ describe("resolveProviderConfig", () => {
 		const resolved = resolveProviderConfig(config, "pelagic-ai");
 		assert.equal(resolved?.provider, "pelagic-ai");
 		assert.equal(resolved?.model, "google/gemma4-moe");
+		assert.deepEqual(resolved?.streamOptions, { thinkingEnabled: true });
+		assert.deepEqual(resolved?.requestParams, { chat_template_kwargs: { enable_thinking: false } });
 		assert.deepEqual(resolved?.compat, { supportsStore: false });
 	});
 
@@ -73,7 +77,54 @@ describe("resolveProviderConfig", () => {
 		assert.equal(resolveProviderConfig(config, "empty"), null);
 	});
 
-	it("defaults compat to an empty object", () => {
-		assert.deepEqual(resolveProviderConfig({ providers: { p: { model: "m" } } }, "p")?.compat, {});
+	it("defaults stream-options, request-params, and compat to empty objects", () => {
+		const resolved = resolveProviderConfig({ providers: { p: { model: "m" } } }, "p");
+		assert.deepEqual(resolved?.streamOptions, {});
+		assert.deepEqual(resolved?.requestParams, {});
+		assert.deepEqual(resolved?.compat, {});
+	});
+});
+
+describe("buildCallOptions", () => {
+	const base = { signal: new AbortController().signal, sessionId: "sess-1" };
+
+	it("defaults thinking off with no provider config", () => {
+		const options = buildCallOptions(null, base);
+		assert.equal(options.thinkingEnabled, false);
+		assert.equal(options.cacheRetention, "none");
+		assert.equal(options.signal, base.signal);
+		assert.equal(options.sessionId, "sess-1");
+		assert.equal(options.samplingParams, undefined);
+	});
+
+	it("merges stream-options and lets the config turn thinking on", () => {
+		const resolved = resolveProviderConfig(
+			{ providers: { p: { model: "m", "stream-options": { thinkingEnabled: true, temperature: 0.2 } } } },
+			"p",
+		);
+		const options = buildCallOptions(resolved, base);
+		assert.equal(options.thinkingEnabled, true);
+		assert.equal(options.temperature, 0.2);
+	});
+
+	it("forwards request-params as samplingParams", () => {
+		const resolved = resolveProviderConfig(
+			{ providers: { p: { model: "m", "request-params": { top_p: 0.9, chat_template_kwargs: { enable_thinking: false } } } } },
+			"p",
+		);
+		assert.deepEqual(buildCallOptions(resolved, base).samplingParams, {
+			top_p: 0.9,
+			chat_template_kwargs: { enable_thinking: false },
+		});
+	});
+
+	it("keeps signal and sessionId from the caller", () => {
+		const resolved = resolveProviderConfig(
+			{ providers: { p: { model: "m", "stream-options": { signal: "nope", sessionId: "nope" } } } },
+			"p",
+		);
+		const options = buildCallOptions(resolved, base);
+		assert.equal(options.signal, base.signal);
+		assert.equal(options.sessionId, "sess-1");
 	});
 });

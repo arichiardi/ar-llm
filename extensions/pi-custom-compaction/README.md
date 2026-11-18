@@ -79,6 +79,7 @@ Create the config file at `~/.config/pi/agent/ar-llm/custom-compaction.json`:
       },
       "chunking": {
         "context-window": 32768,
+        "estimation-chars-per-token": 3,
         "safety-tokens": 512,
         "overlap-messages": 0,
         "max-depth": 4
@@ -160,15 +161,20 @@ is present but the transcript already fits, it still uses one call.
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `context-window` | `number` | required | The model's true usable context per request. Overrides the model metadata, which can lie. |
+| `estimation-chars-per-token` | `number` | `4` | Characters per token for the model's real tokenizer. Lower it (for example `3`) for tokenizers that average fewer characters per token, such as dense code transcripts. |
 | `safety-tokens` | `number` | `512` | Headroom for estimator error. |
 | `overlap-messages` | `number` | `0` | Messages repeated from the tail of one chunk at the start of the next. |
 | `max-depth` | `number` | `4` | Maximum reduce layers before the extension falls back. |
 | `chunking-prompt` | `object` | built-in | Prompt for the merge step. Same shape as `prompt`. |
 
-The response ceiling and the prompt scaffolding are subtracted from
-`context-window` before the extension splits. A single message larger than the
-budget is truncated head-and-tail. A `max-output-tokens` value at or above
-`context-window` is ignored, with the built-in default used instead.
+The extension estimates tokens with a characters-per-token heuristic. It
+assumes 4 characters per token, the same as pi. Set
+`estimation-chars-per-token` to match the model's real tokenizer when that
+assumption is wrong. The response ceiling and the prompt scaffolding are
+subtracted from `context-window` before the extension splits. A single message
+larger than the budget is truncated head-and-tail. A `max-output-tokens` value
+at or above `context-window` is ignored, with the built-in default used
+instead.
 
 ### Behavior
 

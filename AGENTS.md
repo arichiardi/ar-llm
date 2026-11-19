@@ -11,6 +11,12 @@ prompts/           # Custom prompt templates
 skills/            # Custom skills
 ```
 
+## General prompt rules
+
+Prompts and skills in this repository must stay work-neutral. Do not include
+work-related rules, company-specific workflows, or organization-specific
+templates. Keep reusable behavior and formatting guidance only.
+
 To see available extensions, run `ls extensions/` — each package is named `pi-<name>/`.
 
 Each extension lives under `extensions/<name>/` with:

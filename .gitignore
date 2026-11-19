@@ -1,7 +1,5 @@
 .envrc
 
-# vLLM service conf; the global gitignore drops *.env
-!root/opt/llm/conf/vllm/*.env
 node_modules/
 dist/
 *.tsbuildinfo
